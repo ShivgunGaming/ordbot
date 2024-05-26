@@ -1,0 +1,7 @@
+{
+    "BOT_TOKEN": "Your bot token",
+    "CLIENT_ID": "Your client ID",
+    "GUILD_ID": "Your guild ID",
+    "ROLE_ID": "Your role ID",
+    "ORDINALS_API_URL": "https://turbo.ordinalswallet.com"
+}
