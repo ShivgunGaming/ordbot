@@ -1,21 +1,21 @@
-# Ordbot
+# Ordbot 💼
 
 This bot verifies Bitcoin inscriptions and assigns roles to users based on their holdings. It utilizes the Discord.js library and interacts with the Ordinals API to fetch wallet data.
 
-## Features
+## Features 🚀
 
 - Verify Bitcoin inscriptions and assign roles to users
 - Create new collections
 - Setup embeds for verification instructions
 
-## Prerequisites
+## Prerequisites 🛠️
 
 - Node.js installed
 - Discord bot token
 - Access to a Bitcoin wallet with inscriptions
 - Configuration file (`config.json`) with necessary keys and IDs
 
-## Installation
+## Installation ⬇️
 
 1. Clone the repository:
 
@@ -42,7 +42,7 @@ This bot verifies Bitcoin inscriptions and assigns roles to users based on their
     }
     ```
 
-## Usage
+## Usage ℹ️
 
 1. Start the bot:
 
@@ -78,7 +78,7 @@ This bot verifies Bitcoin inscriptions and assigns roles to users based on their
 
         - `description`: Description of the embed
 
-## Commands
+## Commands 🤖
 
 - `/verify`:
   Verifies if the user holds the specified Bitcoin inscription and assigns a role if they do.
@@ -89,7 +89,7 @@ This bot verifies Bitcoin inscriptions and assigns roles to users based on their
 - `/setup-embed`:
   Sets up an embed in the channel for verification instructions.
 
-## Code Overview
+## Code Overview 📝
 
 1. **Initialization and Configuration**:
 
@@ -182,4 +182,3 @@ This bot verifies Bitcoin inscriptions and assigns roles to users based on their
     ```javascript
     client.login(BOT_TOKEN);
     ```
-    
