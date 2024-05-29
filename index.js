@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const fs = require('fs');
+const winston = require('winston');
 const { Sequelize, DataTypes } = require('sequelize');
 const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL } = require('./config.json');
 
@@ -19,6 +20,14 @@ const User = sequelize.define('User', {
 });
 sequelize.sync();
 
+// Logger initialization
+const logger = winston.createLogger({
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({ filename: 'bot.log' })
+    ]
+});
+
 // Fetch wallet data from the API
 const fetchWalletData = async (bitcoinAddress) => {
     const url = `${ORDINALS_API_URL}/wallet/${bitcoinAddress}`;
@@ -26,7 +35,7 @@ const fetchWalletData = async (bitcoinAddress) => {
         const response = await axios.get(url);
         return response.data;
     } catch (error) {
-        console.error('Error fetching wallet data:', error.message);
+        logger.error(`Error fetching wallet data for ${bitcoinAddress}: ${error.message}`);
         return null;
     }
 };
@@ -116,6 +125,10 @@ const commands = [
             },
         ],
     },
+    {
+        name: 'help',
+        description: 'Get help with bot commands',
+    },
 ];
 
 const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
@@ -134,6 +147,7 @@ const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
 
 client.once('ready', () => {
     console.log('Bot is online!');
+    logger.info('Bot started successfully!');
 });
 
 client.on('interactionCreate', async interaction => {
@@ -160,28 +174,55 @@ client.on('interactionCreate', async interaction => {
 
                 await member.roles.add(role);
                 await User.upsert({ discordId: interaction.user.id, bitcoinAddress, inscriptionId: inscriptionToCheck });
-                await interaction.editReply(`Role assigned! You are holding the inscription: ${inscriptionToCheck}`);
+                await interaction.editReply(`Role assigned! You are now verified with the inscription: ${inscriptionToCheck}`);
             } else {
                 await interaction.editReply('You do not hold the required inscription.');
             }
         } else if (commandName === 'create-collection') {
             const collectionName = options.getString('name');
             const roleName = options.getString('role');
-            await interaction.reply(`Collection ${collectionName} created with role ${roleName}.`);
+            await interaction.reply(`Collection "${collectionName}" created with the associated role "${roleName}".`);
         } else if (commandName === 'setup-embed') {
-            const description = options.getString('description');
-            const embed = new EmbedBuilder().setTitle('Verify Ownership').setDescription(description);
-            await interaction.channel.send({ embeds: [embed] });
-            await interaction.reply('Embed setup for verification.');
+            await interaction.deferReply({ ephemeral: true });
+            await interaction.reply('Please provide a description for the verification embed.');
+
+            const filter = m => m.author.id === interaction.user.id;
+            const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
+
+            collector.on('collect', async m => {
+                const description = m.content;
+                const embed = new EmbedBuilder().setTitle('Verify Ownership').setDescription(description);
+                await interaction.channel.send({ embeds: [embed] });
+                await interaction.reply('Embed set up for verification.');
+            });
+
+            collector.on('end', collected => {
+                if (collected.size === 0) {
+                    interaction.followUp('No description provided. Embed setup canceled.');
+                }
+            });
         } else if (commandName === 'set-config') {
+            if (!isAdmin(interaction.member)) {
+                await interaction.reply('You do not have permission to use this command.');
+                return;
+            }
             const key = options.getString('key');
             const value = options.getString('value');
             await setConfig(key, value);
             await interaction.reply(`Configuration updated: ${key} = ${value}`);
+        } else if (commandName === 'help') {
+            const helpMessage = `
+            **Available Commands:**
+            - /verify: Verify your Bitcoin inscription.
+            - /create-collection: Create a new collection.
+            - /setup-embed: Setup an embed for verification.
+            - /set-config: Set a bot configuration.
+            `;
+            await interaction.reply(helpMessage);
         }
     } catch (error) {
-        console.error('Error handling command:', error.message);
-        await interaction.reply('An error occurred while processing your command.');
+        logger.error(`Error handling command ${commandName}: ${error.message}`);
+        await interaction.reply('An error occurred while processing your command. Please try again later.');
     }
 });
 
