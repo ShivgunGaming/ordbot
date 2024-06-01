@@ -4,6 +4,7 @@ const fs = require('fs');
 const winston = require('winston');
 const { Sequelize, DataTypes } = require('sequelize');
 const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL } = require('./config.json');
+const crypto = require('crypto');
 
 // Initialize Discord client
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
@@ -17,8 +18,11 @@ const User = sequelize.define('User', {
     discordId: { type: DataTypes.STRING, primaryKey: true },
     bitcoinAddress: { type: DataTypes.STRING, allowNull: false },
     inscriptionId: { type: DataTypes.STRING, allowNull: false },
+    otp: { type: DataTypes.STRING, allowNull: false },
 });
-sequelize.sync();
+sequelize.sync({ force: true }).then(() => {
+    console.log('Database synced!');
+});
 
 // Logger initialization
 const logger = winston.createLogger({
@@ -50,6 +54,11 @@ const verifyInscription = async (bitcoinAddress, inscriptionToCheck) => {
     return inscriptions.some(inscription => inscription.id === inscriptionToCheck);
 };
 
+// Generate a unique OTP
+const generateOTP = () => {
+    return crypto.randomBytes(3).toString('hex'); // Generates a 6-digit hex OTP
+};
+
 // Set configuration value
 const setConfig = async (key, value) => {
     const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
@@ -73,6 +82,18 @@ const commands = [
                 name: 'inscription',
                 type: ApplicationCommandOptionType.String,
                 description: 'The inscription to check for',
+                required: true,
+            },
+        ],
+    },
+    {
+        name: 'verify-otp',
+        description: 'Verify your OTP',
+        options: [
+            {
+                name: 'otp',
+                type: ApplicationCommandOptionType.String,
+                description: 'The OTP sent to your wallet',
                 required: true,
             },
         ],
@@ -161,7 +182,39 @@ client.on('interactionCreate', async interaction => {
             const inscriptionToCheck = options.getString('inscription');
 
             await interaction.deferReply({ ephemeral: true });
-            const hasInscription = await verifyInscription(bitcoinAddress, inscriptionToCheck);
+
+            // Generate OTP
+            const otp = generateOTP();
+
+            // Save OTP for the user
+            await User.upsert({ 
+                discordId: interaction.user.id, 
+                bitcoinAddress, 
+                inscriptionId: inscriptionToCheck, 
+                otp 
+            });
+
+            // Send OTP to the user (In a real application, you'd send this to the wallet address. Here, we'll just display it for simplicity)
+            await interaction.editReply(`To verify, please enter the following OTP using the /verify-otp command: \`${otp}\``);
+        } else if (commandName === 'verify-otp') {
+            const otp = options.getString('otp');
+
+            // Retrieve user's OTP and other data
+            const user = await User.findByPk(interaction.user.id);
+
+            if (!user) {
+                await interaction.reply('Please initiate the verification process first using /verify command.');
+                return;
+            }
+
+            // Verify the OTP
+            if (user.otp !== otp) {
+                await interaction.reply('Invalid OTP.');
+                return;
+            }
+
+            // Verify the inscription
+            const hasInscription = await verifyInscription(user.bitcoinAddress, user.inscriptionId);
 
             if (hasInscription) {
                 const guild = interaction.guild;
@@ -173,10 +226,10 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 await member.roles.add(role);
-                await User.upsert({ discordId: interaction.user.id, bitcoinAddress, inscriptionId: inscriptionToCheck });
-                await interaction.editReply(`Role assigned! You are now verified with the inscription: ${inscriptionToCheck}`);
+                await User.update({ otp: '' }, { where: { discordId: interaction.user.id } }); // Clear the OTP after successful verification
+                await interaction.reply(`Role assigned! You are now verified with the inscription: ${user.inscriptionId}`);
             } else {
-                await interaction.editReply('You do not hold the required inscription.');
+                await interaction.reply('You do not hold the required inscription.');
             }
         } else if (commandName === 'create-collection') {
             const collectionName = options.getString('name');
@@ -214,6 +267,7 @@ client.on('interactionCreate', async interaction => {
             const helpMessage = `
             **Available Commands:**
             - /verify: Verify your Bitcoin inscription.
+            - /verify-otp: Verify the OTP sent to your wallet.
             - /create-collection: Create a new collection.
             - /setup-embed: Setup an embed for verification.
             - /set-config: Set a bot configuration.
@@ -222,7 +276,11 @@ client.on('interactionCreate', async interaction => {
         }
     } catch (error) {
         logger.error(`Error handling command ${commandName}: ${error.message}`);
-        await interaction.reply('An error occurred while processing your command. Please try again later.');
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply('An error occurred while processing your command. Please try again later.');
+        } else if (interaction.deferred) {
+            await interaction.editReply('An error occurred while processing your command. Please try again later.');
+        }
     }
 });
 
