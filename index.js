@@ -3,7 +3,7 @@ const axios = require('axios');
 const fs = require('fs');
 const winston = require('winston');
 const { Sequelize, DataTypes } = require('sequelize');
-const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL } = require('./config.json');
+const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL, REQUIRED_INSCRIPTIONS } = require('./config.json');
 const crypto = require('crypto');
 
 // Initialize Discord client
@@ -44,14 +44,14 @@ const fetchWalletData = async (bitcoinAddress) => {
     }
 };
 
-// Verify if the inscription exists in the wallet data
-const verifyInscription = async (bitcoinAddress, inscriptionToCheck) => {
+// Verify if any of the required inscriptions exists in the wallet data
+const verifyInscriptions = async (bitcoinAddress, requiredInscriptions) => {
     const walletData = await fetchWalletData(bitcoinAddress);
     if (!walletData) {
         throw new Error('Could not fetch wallet data.');
     }
     const inscriptions = walletData.inscriptions || [];
-    return inscriptions.some(inscription => inscription.id === inscriptionToCheck);
+    return inscriptions.some(inscription => requiredInscriptions.includes(inscription.id));
 };
 
 // Generate a unique OTP
@@ -76,12 +76,6 @@ const commands = [
                 name: 'address',
                 type: ApplicationCommandOptionType.String,
                 description: 'Your Bitcoin address',
-                required: true,
-            },
-            {
-                name: 'inscription',
-                type: ApplicationCommandOptionType.String,
-                description: 'The inscription to check for',
                 required: true,
             },
         ],
@@ -179,22 +173,35 @@ client.on('interactionCreate', async interaction => {
     try {
         if (commandName === 'verify') {
             const bitcoinAddress = options.getString('address');
-            const inscriptionToCheck = options.getString('inscription');
 
             await interaction.deferReply({ ephemeral: true });
 
             // Generate OTP
             const otp = generateOTP();
 
+            // Fetch wallet data
+            const walletData = await fetchWalletData(bitcoinAddress);
+            if (!walletData || !walletData.inscriptions || walletData.inscriptions.length === 0) {
+                await interaction.editReply('No inscriptions found in your wallet.');
+                return;
+            }
+
+            // Check for any required inscriptions
+            const hasRequiredInscription = await verifyInscriptions(bitcoinAddress, REQUIRED_INSCRIPTIONS);
+            if (!hasRequiredInscription) {
+                await interaction.editReply(`None of the required inscriptions were found in your wallet.`);
+                return;
+            }
+
             // Save OTP for the user
-            await User.upsert({ 
-                discordId: interaction.user.id, 
-                bitcoinAddress, 
-                inscriptionId: inscriptionToCheck, 
-                otp 
+            await User.upsert({
+                discordId: interaction.user.id,
+                bitcoinAddress,
+                inscriptionId: walletData.inscriptions[0].id, // Save the first inscription found
+                otp
             });
 
-            // Send OTP to the user (In a real application, you'd send this to the wallet address. Here, we'll just display it for simplicity)
+            // Send OTP to the user
             await interaction.editReply(`To verify, please enter the following OTP using the /verify-otp command: \`${otp}\``);
         } else if (commandName === 'verify-otp') {
             const otp = options.getString('otp');
@@ -214,7 +221,7 @@ client.on('interactionCreate', async interaction => {
             }
 
             // Verify the inscription
-            const hasInscription = await verifyInscription(user.bitcoinAddress, user.inscriptionId);
+            const hasInscription = await verifyInscriptions(user.bitcoinAddress, REQUIRED_INSCRIPTIONS);
 
             if (hasInscription) {
                 const guild = interaction.guild;
@@ -227,9 +234,9 @@ client.on('interactionCreate', async interaction => {
 
                 await member.roles.add(role);
                 await User.update({ otp: '' }, { where: { discordId: interaction.user.id } }); // Clear the OTP after successful verification
-                await interaction.reply(`Role assigned! You are now verified with the inscription: ${user.inscriptionId}`);
+                await interaction.reply(`Role assigned! You are now verified.`);
             } else {
-                await interaction.reply('You do not hold the required inscription.');
+                await interaction.reply('You do not hold any of the required inscriptions.');
             }
         } else if (commandName === 'create-collection') {
             const collectionName = options.getString('name');
