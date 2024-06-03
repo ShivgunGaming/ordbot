@@ -1,6 +1,6 @@
-# Ordbot 🤖
+# Ordbot 
 
-![ordbot](https://github.com/ShivgunGaming/ordbot/assets/102505925/c7c3efc2-a8f9-4790-a0b1-cbb19b4b6123)
+![ordbotv2](https://github.com/ShivgunGaming/ordbot/assets/102505925/5e5976ae-c0bf-46cc-8337-e6e700c63330)
 
 This Discord bot facilitates the verification process using Bitcoin inscriptions and OTP (One-Time Password) for user authentication. It interacts with a wallet API to fetch Bitcoin inscription data and provides role assignment upon successful verification.
 
