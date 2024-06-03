@@ -29,3 +29,6 @@ This Discord bot facilitates the verification process using Bitcoin inscriptions
 - `/setup-embed`: Set up an embed for verification (Admin only).
 - `/set-config`: Set bot configuration settings (Admin only).
 - `/help`: Get help with bot commands.
+
+## Adding the Bot to Your Server 🌐
+To add this bot to your Discord server, click [here](https://discord.com/oauth2/authorize?client_id=1241662241418248212&permissions=633318697598967&scope=bot).
