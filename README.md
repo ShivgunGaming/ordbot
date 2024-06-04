@@ -25,9 +25,6 @@ This Discord bot facilitates the verification process using Bitcoin inscriptions
 ## Usage 🚀
 - `/verify`: Initiate the verification process by providing your Bitcoin address.
 - `/verify-otp`: Verify the OTP sent to your wallet during the verification process.
-- `/create-collection`: Create a new collection with an associated role.
-- `/setup-embed`: Set up an embed for verification (Admin only).
-- `/set-config`: Set bot configuration settings (Admin only).
 - `/help`: Get help with bot commands.
 
 ## Adding the Bot to Your Server 🌐
