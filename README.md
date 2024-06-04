@@ -7,8 +7,6 @@ This Discord bot facilitates the verification process using Bitcoin inscriptions
 - **OTP Verification**: Users can verify their OTP using the `/verify-otp` command.
 - **Role Assignment**: Upon successful verification, users receive a designated role.
 - **Command Customization**: Bot commands can be customized and extended as needed.
-- **Embed Setup**: Admins can set up an embed for verification using the `/setup-embed` command.
-- **Configuration Management**: Admins can configure bot settings using the `/set-config` command.
 
 ## Dependencies 📦
 - [discord.js](https://discord.js.org/) - Discord API wrapper for Node.js
