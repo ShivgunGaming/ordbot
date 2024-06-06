@@ -3,7 +3,7 @@ const axios = require('axios');
 const fs = require('fs');
 const winston = require('winston');
 const { Sequelize, DataTypes } = require('sequelize');
-const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL, REQUIRED_INSCRIPTIONS, LOG_CHANNEL_ID, ADMIN_ROLE_ID } = require('./config.json');
+const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL, REQUIRED_INSCRIPTIONS, LOG_CHANNEL_ID } = require('./config.json');
 const crypto = require('crypto');
 
 // Initialize Discord client
@@ -16,7 +16,6 @@ const User = sequelize.define('User', {
     bitcoinAddress: { type: DataTypes.STRING, allowNull: false },
     inscriptionId: { type: DataTypes.STRING, allowNull: false },
     otp: { type: DataTypes.STRING, allowNull: false },
-    otpExpiresAt: { type: DataTypes.DATE, allowNull: false },
 });
 sequelize.sync().then(() => console.log('Database synced!'));
 
@@ -128,10 +127,6 @@ client.on('interactionCreate', async interaction => {
                 await handleListVerified(interaction);
                 break;
             case 'remove-verification':
-                if (!interaction.member.roles.cache.has(ADMIN_ROLE_ID)) {
-                    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
-                    return;
-                }
                 await handleRemoveVerification(interaction, options.getUser('user'));
                 break;
         }
@@ -144,7 +139,6 @@ client.on('interactionCreate', async interaction => {
 const handleVerify = async (interaction, bitcoinAddress) => {
     await interaction.deferReply({ ephemeral: true });
     const otp = generateOTP();
-    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // OTP valid for 10 minutes
     const walletData = await fetchWalletData(bitcoinAddress);
     if (!walletData?.inscriptions?.length) {
         await interaction.editReply('No inscriptions found in your wallet.');
@@ -158,8 +152,7 @@ const handleVerify = async (interaction, bitcoinAddress) => {
         discordId: interaction.user.id,
         bitcoinAddress,
         inscriptionId: walletData.inscriptions[0].id,
-        otp,
-        otpExpiresAt
+        otp
     });
     await interaction.editReply(`To verify, please enter the following OTP using the /verify-otp command: \`${otp}\``);
 };
@@ -170,8 +163,8 @@ const handleVerifyOtp = async (interaction, otp) => {
         await interaction.reply('Please initiate the verification process first using /verify command.');
         return;
     }
-    if (user.otp !== otp || new Date() > user.otpExpiresAt) {
-        await interaction.reply('Invalid or expired OTP.');
+    if (user.otp !== otp) {
+        await interaction.reply('Invalid OTP.');
         return;
     }
     if (!await verifyInscriptions(user.bitcoinAddress, REQUIRED_INSCRIPTIONS)) {
@@ -183,7 +176,7 @@ const handleVerifyOtp = async (interaction, otp) => {
     const member = await guild.members.fetch(interaction.user.id);
     let role = guild.roles.cache.get(ROLE_ID) || await guild.roles.create({ name: 'Verified', color: 'BLUE' });
     await member.roles.add(role);
-    await User.update({ otp: '', otpExpiresAt: null }, { where: { discordId: interaction.user.id } });
+    await User.update({ otp: ''}, { where: { discordId: interaction.user.id } });
     await interaction.reply('Role assigned! You are now verified.');
 
     // Log to admin channel
@@ -199,13 +192,18 @@ const handleVerifyOtp = async (interaction, otp) => {
 };
 
 const handleListVerified = async (interaction) => {
-    const verifiedUsers = await User.findAll({ attributes: ['discordId', 'bitcoinAddress'] });
-    if (!verifiedUsers.length) {
-        await interaction.reply('No verified users found.');
-        return;
+    try {
+        const verifiedUsers = await User.findAll({ attributes: ['discordId', 'bitcoinAddress'] });
+        if (!verifiedUsers.length) {
+            await interaction.reply('No verified users found.');
+            return;
+        }
+        const userList = verifiedUsers.map(user => `<@${user.discordId}> - Bitcoin Address: ${user.bitcoinAddress}`).join('\n');
+        await interaction.reply({ embeds: [new EmbedBuilder().setTitle('Verified Users').setDescription(userList).setColor('#0000FF')] }); // Change color to blue
+    } catch (error) {
+        logger.error(`Error listing verified users: ${error.message}`);
+        await replyWithError(interaction);
     }
-    const userList = verifiedUsers.map(user => `<@${user.discordId}>`).join('\n');
-    await interaction.reply({ embeds: [new EmbedBuilder().setTitle('Verified Users').setDescription(userList).setColor('BLUE')] });
 };
 
 const handleRemoveVerification = async (interaction, user) => {
@@ -245,7 +243,7 @@ const getHelpMessage = () => {
         - /list-verified: List all verified users.
         - /remove-verification: Remove a user's verification.
         `)
-        .setColor('GREEN');
+        .setColor('#00FF00'); // Change color to green
 };
 
 const replyWithError = async interaction => {
