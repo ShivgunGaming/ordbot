@@ -21,12 +21,18 @@ sequelize.sync().then(() => console.log('Database synced!'));
 
 // Logger initialization
 const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)
+    ),
     transports: [
         new winston.transports.Console(),
         new winston.transports.File({ filename: 'bot.log' })
     ]
 });
 
+// Fetch wallet data from external API
 const fetchWalletData = async (bitcoinAddress) => {
     const url = `${ORDINALS_API_URL}/wallet/${bitcoinAddress}`;
     try {
@@ -38,14 +44,17 @@ const fetchWalletData = async (bitcoinAddress) => {
     }
 };
 
+// Verify if the wallet contains required inscriptions
 const verifyInscriptions = async (bitcoinAddress, requiredInscriptions) => {
     const walletData = await fetchWalletData(bitcoinAddress);
     if (!walletData) throw new Error('Could not fetch wallet data.');
     return walletData.inscriptions?.some(inscription => requiredInscriptions.includes(inscription.id));
 };
 
+// Generate a secure OTP
 const generateOTP = () => crypto.randomBytes(3).toString('hex');
 
+// Commands definition
 const commands = [
     {
         name: 'verify',
@@ -63,6 +72,11 @@ const commands = [
         name: 'remove-verification',
         description: 'Remove a user\'s verification',
         options: [{ name: 'user', type: ApplicationCommandOptionType.User, description: 'The user to remove verification from', required: true }]
+    },
+    {
+        name: 'update-required-inscriptions',
+        description: 'Update the list of required inscriptions',
+        options: [{ name: 'inscriptions', type: ApplicationCommandOptionType.String, description: 'Comma-separated list of required inscription IDs', required: true }]
     }
 ];
 
@@ -77,6 +91,7 @@ const rest = new REST({ version: '10' }).setToken(BOT_TOKEN);
     }
 })();
 
+// Bot ready event
 client.once('ready', () => {
     console.log('Bot is online!');
     logger.info('Bot started successfully!');
@@ -88,31 +103,15 @@ client.once('ready', () => {
 
 const cooldowns = new Map();
 
+// Handle command interactions
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
+
     const { commandName, options, user } = interaction;
 
-    // Cooldown handling
-    if (!cooldowns.has(commandName)) {
-        cooldowns.set(commandName, new Map());
-    }
-
-    const now = Date.now();
-    const timestamps = cooldowns.get(commandName);
-    const cooldownAmount = 3000; // 3 seconds cooldown
-
-    if (timestamps.has(user.id)) {
-        const expirationTime = timestamps.get(user.id) + cooldownAmount;
-        if (now < expirationTime) {
-            const timeLeft = (expirationTime - now) / 1000;
-            return interaction.reply({ content: `Please wait ${timeLeft.toFixed(1)} more seconds before reusing the \`${commandName}\` command.`, ephemeral: true });
-        }
-    }
-
-    timestamps.set(user.id, now);
-    setTimeout(() => timestamps.delete(user.id), cooldownAmount);
-
     try {
+        handleCooldown(commandName, user.id);
+
         switch (commandName) {
             case 'verify':
                 await handleVerify(interaction, options.getString('address'));
@@ -129,6 +128,9 @@ client.on('interactionCreate', async interaction => {
             case 'remove-verification':
                 await handleRemoveVerification(interaction, options.getUser('user'));
                 break;
+            case 'update-required-inscriptions':
+                await handleUpdateRequiredInscriptions(interaction, options.getString('inscriptions'));
+                break;
         }
     } catch (error) {
         logger.error(`Error handling command ${commandName}: ${error.message}`);
@@ -136,6 +138,29 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+// Cooldown handling
+const handleCooldown = (commandName, userId) => {
+    if (!cooldowns.has(commandName)) {
+        cooldowns.set(commandName, new Map());
+    }
+
+    const now = Date.now();
+    const timestamps = cooldowns.get(commandName);
+    const cooldownAmount = 3000; // 3 seconds cooldown
+
+    if (timestamps.has(userId)) {
+        const expirationTime = timestamps.get(userId) + cooldownAmount;
+        if (now < expirationTime) {
+            const timeLeft = (expirationTime - now) / 1000;
+            throw new Error(`Please wait ${timeLeft.toFixed(1)} more seconds before reusing the \`${commandName}\` command.`);
+        }
+    }
+
+    timestamps.set(userId, now);
+    setTimeout(() => timestamps.delete(userId), cooldownAmount);
+};
+
+// Handle verify command
 const handleVerify = async (interaction, bitcoinAddress) => {
     await interaction.deferReply({ ephemeral: true });
     const otp = generateOTP();
@@ -157,6 +182,7 @@ const handleVerify = async (interaction, bitcoinAddress) => {
     await interaction.editReply(`To verify, please enter the following OTP using the /verify-otp command: \`${otp}\``);
 };
 
+// Handle verify-otp command
 const handleVerifyOtp = async (interaction, otp) => {
     const user = await User.findByPk(interaction.user.id);
     if (!user) {
@@ -191,6 +217,7 @@ const handleVerifyOtp = async (interaction, otp) => {
     }
 };
 
+// Handle list-verified command
 const handleListVerified = async (interaction) => {
     try {
         const verifiedUsers = await User.findAll({ attributes: ['discordId', 'bitcoinAddress'] });
@@ -199,13 +226,14 @@ const handleListVerified = async (interaction) => {
             return;
         }
         const userList = verifiedUsers.map(user => `<@${user.discordId}> - Bitcoin Address: ${user.bitcoinAddress}`).join('\n');
-        await interaction.reply({ embeds: [new EmbedBuilder().setTitle('Verified Users').setDescription(userList).setColor('#0000FF')] }); // Change color to blue
+        await interaction.reply({ embeds: [new EmbedBuilder().setTitle('Verified Users').setDescription(userList).setColor('#0000FF')] });
     } catch (error) {
         logger.error(`Error listing verified users: ${error.message}`);
         await replyWithError(interaction);
     }
 };
 
+// Handle remove-verification command
 const handleRemoveVerification = async (interaction, user) => {
     const guild = interaction.guild;
     const member = await guild.members.fetch(user.id);
@@ -225,6 +253,21 @@ const handleRemoveVerification = async (interaction, user) => {
     }
 };
 
+// Handle update-required-inscriptions command
+const handleUpdateRequiredInscriptions = async (interaction, inscriptions) => {
+    try {
+        const inscriptionList = inscriptions.split(',').map(inscription => inscription.trim());
+        const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        config.REQUIRED_INSCRIPTIONS = inscriptionList;
+        fs.writeFileSync('./config.json', JSON.stringify(config, null, 4));
+        await interaction.reply('Required inscriptions have been updated successfully.');
+    } catch (error) {
+        logger.error(`Error updating required inscriptions: ${error.message}`);
+        await replyWithError(interaction);
+    }
+};
+
+// Remove role from a user
 const removeRole = async (guild, userId) => {
     const member = await guild.members.fetch(userId);
     const role = guild.roles.cache.get(ROLE_ID);
@@ -233,6 +276,7 @@ const removeRole = async (guild, userId) => {
     }
 };
 
+// Get help message
 const getHelpMessage = () => {
     return new EmbedBuilder()
         .setTitle('Help')
@@ -242,11 +286,13 @@ const getHelpMessage = () => {
         - /verify-otp: Verify the OTP sent to your wallet.
         - /list-verified: List all verified users.
         - /remove-verification: Remove a user's verification.
+        - /update-required-inscriptions: Update the list of required inscriptions.
         `)
-        .setColor('#00FF00'); // Change color to green
+        .setColor('#00FF00');
 };
 
-const replyWithError = async interaction => {
+// Reply with error message
+const replyWithError = async (interaction) => {
     const errorMessage = 'An error occurred while processing your command. Please try again later.';
     if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: errorMessage, ephemeral: true });
