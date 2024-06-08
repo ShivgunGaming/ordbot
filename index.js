@@ -110,7 +110,7 @@ client.on('interactionCreate', async interaction => {
     const { commandName, options, user } = interaction;
 
     try {
-        handleCooldown(commandName, user.id);
+        handleCooldown(commandName, user.id, interaction);
 
         switch (commandName) {
             case 'verify':
@@ -134,12 +134,12 @@ client.on('interactionCreate', async interaction => {
         }
     } catch (error) {
         logger.error(`Error handling command ${commandName}: ${error.message}`);
-        await replyWithError(interaction);
+        await replyWithError(interaction, 'An error occurred while processing your command. Please try again later.');
     }
 });
 
 // Cooldown handling
-const handleCooldown = (commandName, userId) => {
+const handleCooldown = (commandName, userId, interaction) => {
     if (!cooldowns.has(commandName)) {
         cooldowns.set(commandName, new Map());
     }
@@ -229,7 +229,7 @@ const handleListVerified = async (interaction) => {
         await interaction.reply({ embeds: [new EmbedBuilder().setTitle('Verified Users').setDescription(userList).setColor('#0000FF')] });
     } catch (error) {
         logger.error(`Error listing verified users: ${error.message}`);
-        await replyWithError(interaction);
+        await replyWithError(interaction, 'An error occurred while processing your command. Please try again later.');
     }
 };
 
@@ -263,7 +263,7 @@ const handleUpdateRequiredInscriptions = async (interaction, inscriptions) => {
         await interaction.reply('Required inscriptions have been updated successfully.');
     } catch (error) {
         logger.error(`Error updating required inscriptions: ${error.message}`);
-        await replyWithError(interaction);
+        await replyWithError(interaction, 'An error occurred while processing your command. Please try again later.');
     }
 };
 
@@ -292,8 +292,8 @@ const getHelpMessage = () => {
 };
 
 // Reply with error message
-const replyWithError = async (interaction) => {
-    const errorMessage = 'An error occurred while processing your command. Please try again later.';
+const replyWithError = async (interaction, errorMessage) => {
+    const errorMsg = errorMessage || 'An error occurred while processing your command. Please try again later.';
     if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({ content: errorMessage, ephemeral: true });
     } else if (interaction.deferred) {
