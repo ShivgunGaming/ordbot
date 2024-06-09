@@ -53,10 +53,14 @@ const verifyInscriptions = async (bitcoinAddress, requiredInscriptions) => {
 const generateOTP = () => crypto.randomBytes(3).toString('hex');
 
 const removeRole = async (guild, userId) => {
-    const member = await guild.members.fetch(userId);
-    const role = guild.roles.cache.get(ROLE_ID);
-    if (role) {
-        await member.roles.remove(role);
+    try {
+        const member = await guild.members.fetch(userId);
+        const role = guild.roles.cache.get(ROLE_ID);
+        if (role) {
+            await member.roles.remove(role);
+        }
+    } catch (error) {
+        logger.error(`Error removing role: ${error.message}`);
     }
 };
 
@@ -65,7 +69,6 @@ const getHelpMessage = () => new EmbedBuilder()
     .setDescription(`
         **Available Commands:**
         - /verify: Verify your Bitcoin inscription.
-        - /verify-otp: Verify the OTP sent to your wallet.
         - /list-verified: List all verified users.
         - /remove-verification: Remove a user's verification.
         - /update-required-inscriptions: Update the list of required inscriptions.
@@ -82,57 +85,65 @@ const replyWithError = async (interaction, errorMessage) => {
 };
 
 // Command handlers
-const handleVerify = async (interaction, bitcoinAddress) => {
+const handleVerify = async (interaction, bitcoinAddress, otp = null) => {
     await interaction.deferReply({ ephemeral: true });
-    const otp = generateOTP();
-    const walletData = await fetchWalletData(bitcoinAddress);
-    if (!walletData?.inscriptions?.length) {
-        await interaction.editReply('No inscriptions found in your wallet.');
-        return;
-    }
-    if (!await verifyInscriptions(bitcoinAddress, REQUIRED_INSCRIPTIONS)) {
-        await interaction.editReply('None of the required inscriptions were found in your wallet.');
-        return;
-    }
-    await User.upsert({
-        discordId: interaction.user.id,
-        bitcoinAddress,
-        inscriptionId: walletData.inscriptions[0].id,
-        otp
-    });
-    await interaction.editReply(`To verify, please enter the following OTP using the /verify-otp command: \`${otp}\``);
-};
 
-const handleVerifyOtp = async (interaction, otp) => {
-    const user = await User.findByPk(interaction.user.id);
-    if (!user) {
-        await interaction.reply('Please initiate the verification process first using /verify command.');
-        return;
-    }
-    if (user.otp !== otp) {
-        await interaction.reply('Invalid OTP.');
-        return;
-    }
-    if (!await verifyInscriptions(user.bitcoinAddress, REQUIRED_INSCRIPTIONS)) {
-        await interaction.reply('You do not hold any of the required inscriptions.');
-        await removeRole(interaction.guild, interaction.user.id);
-        return;
-    }
-    const guild = interaction.guild;
-    const member = await guild.members.fetch(interaction.user.id);
-    let role = guild.roles.cache.get(ROLE_ID) || await guild.roles.create({ name: 'Verified', color: 'BLUE' });
-    await member.roles.add(role);
-    await User.update({ otp: '' }, { where: { discordId: interaction.user.id } });
-    await interaction.reply('Role assigned! You are now verified.');
+    try {
+        if (!otp) {
+            // First step: generate OTP and prompt user
+            const generatedOtp = generateOTP();
+            const walletData = await fetchWalletData(bitcoinAddress);
+            if (!walletData?.inscriptions?.length) {
+                await interaction.editReply('No inscriptions found in your wallet.');
+                return;
+            }
+            if (!await verifyInscriptions(bitcoinAddress, REQUIRED_INSCRIPTIONS)) {
+                await interaction.editReply('None of the required inscriptions were found in your wallet.');
+                return;
+            }
+            await User.upsert({
+                discordId: interaction.user.id,
+                bitcoinAddress,
+                inscriptionId: walletData.inscriptions[0].id,
+                otp: generatedOtp
+            });
+            await interaction.editReply(`To verify, please enter the following OTP using the /verify command again with the otp option: \`${generatedOtp}\``);
+        } else {
+            // Second step: verify OTP
+            const user = await User.findByPk(interaction.user.id);
+            if (!user) {
+                await interaction.editReply('Please initiate the verification process first using /verify command.');
+                return;
+            }
+            if (user.otp !== otp) {
+                await interaction.editReply('Invalid OTP.');
+                return;
+            }
+            if (!await verifyInscriptions(user.bitcoinAddress, REQUIRED_INSCRIPTIONS)) {
+                await interaction.editReply('You do not hold any of the required inscriptions.');
+                await removeRole(interaction.guild, interaction.user.id);
+                return;
+            }
+            const guild = interaction.guild;
+            const member = await guild.members.fetch(interaction.user.id);
+            let role = guild.roles.cache.get(ROLE_ID) || await guild.roles.create({ name: 'Verified', color: 'BLUE' });
+            await member.roles.add(role);
+            await User.update({ otp: '' }, { where: { discordId: interaction.user.id } });
+            await interaction.editReply('Role assigned! You are now verified.');
 
-    const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (logChannel) {
-        const embed = new EmbedBuilder()
-            .setTitle('User Verified')
-            .setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`)
-            .setColor('BLUE')
-            .setTimestamp();
-        await logChannel.send({ embeds: [embed] });
+            const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
+            if (logChannel) {
+                const embed = new EmbedBuilder()
+                    .setTitle('User Verified')
+                    .setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`)
+                    .setColor('BLUE')
+                    .setTimestamp();
+                await logChannel.send({ embeds: [embed] });
+            }
+        }
+    } catch (error) {
+        logger.error(`Error during verification process: ${error.message}`);
+        await replyWithError(interaction, 'An error occurred while processing your verification. Please try again later.');
     }
 };
 
@@ -152,20 +163,25 @@ const handleListVerified = async (interaction) => {
 };
 
 const handleRemoveVerification = async (interaction, user) => {
-    const guild = interaction.guild;
-    const member = await guild.members.fetch(user.id);
-    await removeRole(guild, user.id);
-    await User.destroy({ where: { discordId: user.id } });
-    await interaction.reply(`Verification removed for ${user.tag}.`);
+    try {
+        const guild = interaction.guild;
+        const member = await guild.members.fetch(user.id);
+        await removeRole(guild, user.id);
+        await User.destroy({ where: { discordId: user.id } });
+        await interaction.reply(`Verification removed for ${user.tag}.`);
 
-    const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (logChannel) {
-        const embed = new EmbedBuilder()
-            .setTitle('Verification Removed')
-            .setDescription(`<@${user.id}> has had their verification removed.`)
-            .setColor('RED')
-            .setTimestamp();
-        await logChannel.send({ embeds: [embed] });
+        const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
+        if (logChannel) {
+            const embed = new EmbedBuilder()
+                .setTitle('Verification Removed')
+                .setDescription(`<@${user.id}> has had their verification removed.`)
+                .setColor('RED')
+                .setTimestamp();
+            await logChannel.send({ embeds: [embed] });
+        }
+    } catch (error) {
+        logger.error(`Error removing verification: ${error.message}`);
+        await replyWithError(interaction, 'An error occurred while processing your command. Please try again later.');
     }
 };
 
@@ -211,12 +227,10 @@ const commands = [
     {
         name: 'verify',
         description: 'Verify your Bitcoin inscription',
-        options: [{ name: 'address', type: ApplicationCommandOptionType.String, description: 'Your Bitcoin address', required: true }]
-    },
-    {
-        name: 'verify-otp',
-        description: 'Verify your OTP',
-        options: [{ name: 'otp', type: ApplicationCommandOptionType.String, description: 'The OTP sent to your wallet', required: true }]
+        options: [
+            { name: 'address', type: ApplicationCommandOptionType.String, description: 'Your Bitcoin address', required: false },
+            { name: 'otp', type: ApplicationCommandOptionType.String, description: 'The OTP sent to your wallet', required: false }
+        ]
     },
     { name: 'help', description: 'Get help with bot commands' },
     { name: 'list-verified', description: 'List all verified users' },
@@ -264,10 +278,7 @@ client.on('interactionCreate', async interaction => {
 
         switch (commandName) {
             case 'verify':
-                await handleVerify(interaction, options.getString('address'));
-                break;
-            case 'verify-otp':
-                await handleVerifyOtp(interaction, options.getString('otp'));
+                await handleVerify(interaction, options.getString('address'), options.getString('otp'));
                 break;
             case 'help':
                 await interaction.reply({ embeds: [getHelpMessage()] });
