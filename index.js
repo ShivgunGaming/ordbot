@@ -103,14 +103,35 @@ const getHelpMessage = () =>
     )
     .setColor("#00FF00");
 
-const replyWithError = async (interaction, errorMessage) => {
-  const errorMsg =
-    errorMessage ||
-    "An error occurred while processing your command. Please try again later.";
-  if (!interaction.replied && !interaction.deferred)
-    await interaction.reply({ content: errorMsg, ephemeral: true });
-  else if (interaction.deferred) await interaction.editReply(errorMsg);
-};
+    const replyWithError = async (interaction, errorMessage) => {
+        const errorMsg =
+          errorMessage ||
+          "An error occurred while processing your command. Please try again later.";
+      
+        // Check if the interaction is a slash command and if it's replied or deferred
+        if (interaction.isCommand() && (!interaction.replied || !interaction.deferred)) {
+          // Check the type of error and provide specific feedback
+          switch (errorMsg) {
+            case "INVALID_ADDRESS":
+              await interaction.reply({ content: "Invalid Bitcoin address. Please provide a valid address.", ephemeral: true });
+              break;
+            case "NO_INSCRIPTIONS":
+              await interaction.reply({ content: "No inscriptions found in your wallet.", ephemeral: true });
+              break;
+            // Add more cases for specific errors as needed
+            default:
+              await interaction.reply({ content: errorMsg, ephemeral: true });
+              break;
+          }
+        } else {
+          // Reply or edit the original message based on interaction type
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: errorMsg, ephemeral: true });
+          } else if (interaction.deferred) {
+            await interaction.editReply(errorMsg);
+          }
+        }
+      };      
 
 const handleVerify = async (interaction, bitcoinAddress) => {
   await interaction.deferReply({ ephemeral: true });
