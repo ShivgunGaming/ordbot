@@ -5,10 +5,13 @@ This Discord bot facilitates the verification process using Bitcoin inscriptions
 ![ordbotdemo](https://github.com/ShivgunGaming/ordbot/assets/102505925/a523687f-c3ed-4ada-892b-d480963f1517)
 
 ## Features ✨
-- **Verification Process**: Users can verify their Bitcoin inscription using the `/verify` command and receive an OTP.
-- **OTP Verification**: Users can verify their OTP using the `/verify-otp` command.
-- **Role Assignment**: Upon successful verification, users receive a designated role.
-- **Command Customization**: Bot commands can be customized and extended as needed.
+- `verify`: Verify a user's Bitcoin inscription.
+- `help`: Get help with bot commands.
+- `list-verified`: List all verified users.
+- `remove-verification`: Remove a user's verification.
+
+- ## Database
+Ordbot uses SQLite as its database system. The database file is named `database.sqlite`.
 
 ## Dependencies 📦
 - [discord.js](https://discord.js.org/) - Discord API wrapper for Node.js
