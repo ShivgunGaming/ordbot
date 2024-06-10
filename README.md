@@ -10,7 +10,7 @@ This Discord bot facilitates the verification process using Bitcoin inscriptions
 - `list-verified`: List all verified users.
 - `remove-verification`: Remove a user's verification.
 
-- ## Database
+## Database
 Ordbot uses SQLite as its database system. The database file is named `database.sqlite`.
 
 ## Dependencies 📦
@@ -26,9 +26,9 @@ Ordbot uses SQLite as its database system. The database file is named `database.
 3. Run the bot using `node index.js`.
 
 ## Usage 🚀
-- `/verify`: Initiate the verification process by providing your Bitcoin address.
-- `/verify-otp`: Verify the OTP sent to your wallet during the verification process.
-- `/help`: Get help with bot commands.
+- `/verify [address]`: Verify your Bitcoin inscription. Optionally provide a Bitcoin address.
+- `/list-verified`: List all verified users.
+- `/remove-verification [user]`: Remove a user's verification.
 
 ## Adding the Bot to Your Server 🌐
 To add this bot to your Discord server, click [here](https://discord.com/oauth2/authorize?client_id=1241662241418248212&permissions=633318697598967&scope=bot).
