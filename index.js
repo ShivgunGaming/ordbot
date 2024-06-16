@@ -1,13 +1,35 @@
-const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, EmbedBuilder, ActivityType, MessageActionRow, MessageButton } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  ApplicationCommandOptionType,
+  EmbedBuilder,
+  ActivityType,
+  MessageActionRow,
+  MessageButton,
+} = require("discord.js");
 const axios = require("axios");
 const winston = require("winston");
 const { Sequelize, DataTypes } = require("sequelize");
 const crypto = require("crypto");
-const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL, LOG_CHANNEL_ID, REQUIRED_INSCRIPTIONS } = require("./config.json");
+const {
+  BOT_TOKEN,
+  CLIENT_ID,
+  GUILD_ID,
+  ROLE_ID,
+  ORDINALS_API_URL,
+  LOG_CHANNEL_ID,
+  REQUIRED_INSCRIPTIONS,
+} = require("./config.json");
 
 // Initialize Discord client
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 // Initialize Sequelize for database
@@ -23,25 +45,35 @@ const User = sequelize.define("User", {
   inscriptionId: { type: DataTypes.STRING, allowNull: false },
   otp: { type: DataTypes.STRING, allowNull: false },
 });
-sequelize.sync().then(() => console.log("Database synced!"));
+sequelize.sync().then(() => console.log("Database synced!"))
+  .catch(error => console.error('Error syncing database:', error));
 
 // Configure Winston logger
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)
+    winston.format.printf(
+      ({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`
+    )
   ),
-  transports: [new winston.transports.Console(), new winston.transports.File({ filename: "bot.log" })],
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: "bot.log" }),
+  ],
 });
 
 // Utility functions
 const fetchWalletData = async (bitcoinAddress) => {
   try {
-    const { data } = await axios.get(`${ORDINALS_API_URL}/wallet/${bitcoinAddress}`);
+    const { data } = await axios.get(
+      `${ORDINALS_API_URL}/wallet/${bitcoinAddress}`
+    );
     return data;
   } catch (error) {
-    logger.error(`Error fetching wallet data for ${bitcoinAddress}: ${error.message}`);
+    logger.error(
+      `Error fetching wallet data for ${bitcoinAddress}: ${error.message}`
+    );
     return null;
   }
 };
@@ -49,7 +81,9 @@ const fetchWalletData = async (bitcoinAddress) => {
 const verifyInscriptions = async (bitcoinAddress, requiredInscriptions) => {
   const walletData = await fetchWalletData(bitcoinAddress);
   if (!walletData) throw new Error("Could not fetch wallet data.");
-  return walletData.inscriptions?.some(inscription => requiredInscriptions.includes(inscription.id));
+  return walletData.inscriptions?.some((inscription) =>
+    requiredInscriptions.includes(inscription.id)
+  );
 };
 
 const generateOTP = () => crypto.randomBytes(3).toString("hex");
@@ -64,18 +98,23 @@ const removeRole = async (guild, userId) => {
   }
 };
 
-const getHelpMessage = () => new EmbedBuilder()
-  .setTitle("Help")
-  .setDescription(`
+const getHelpMessage = () =>
+  new EmbedBuilder()
+    .setTitle("Help")
+    .setDescription(
+      `
     **Available Commands:**
     - /verify: Verify your Bitcoin inscription.
     - /list-verified: List all verified users.
     - /remove-verification: Remove a user's verification.
-  `)
-  .setColor("#00FF00");
+  `
+    )
+    .setColor("#00FF00");
 
 const replyWithError = async (interaction, errorMessage) => {
-  const errorMsg = errorMessage || "An error occurred while processing your command. Please try again later.";
+  const errorMsg =
+    errorMessage ||
+    "An error occurred while processing your command. Please try again later.";
   try {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ content: errorMsg, ephemeral: true });
@@ -91,41 +130,99 @@ const replyWithError = async (interaction, errorMessage) => {
 const handleVerify = async (interaction, bitcoinAddress) => {
   await interaction.deferReply({ ephemeral: true });
   try {
-    if (!bitcoinAddress) return await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
+    if (!bitcoinAddress)
+      return await replyWithError(
+        interaction,
+        "Invalid Bitcoin address. Please provide a valid address."
+      );
     const walletData = await fetchWalletData(bitcoinAddress);
-    if (!walletData?.inscriptions?.length) return await replyWithError(interaction, "No inscriptions found in your wallet.");
+    if (!walletData?.inscriptions?.length)
+      return await replyWithError(
+        interaction,
+        "No inscriptions found in your wallet."
+      );
     if (!(await verifyInscriptions(bitcoinAddress, REQUIRED_INSCRIPTIONS))) {
       await removeRole(interaction.guild, interaction.user.id);
-      return await interaction.editReply("You do not hold any of the required inscriptions.");
+      return await interaction.editReply(
+        "You do not hold any of the required inscriptions."
+      );
     }
     const guild = interaction.guild;
     const member = await guild.members.fetch(interaction.user.id);
-    let role = guild.roles.cache.get(ROLE_ID) || (await guild.roles.create({ name: "Verified", color: "BLUE" }));
+    let role =
+      guild.roles.cache.get(ROLE_ID) ||
+      (await guild.roles.create({ name: "Verified", color: "BLUE" }));
     await member.roles.add(role);
+    
+    // Store user information in the database
+    await User.upsert({
+      discordId: interaction.user.id,
+      bitcoinAddress: bitcoinAddress,
+      inscriptionId: walletData.inscriptions.map(insc => insc.id).join(','),
+      otp: generateOTP()
+    });
+
     const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
     if (logChannel) {
       await logChannel.send({
-        embeds: [new EmbedBuilder().setTitle("User Verified").setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`).setColor("BLUE").setTimestamp()],
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("User Verified")
+            .setDescription(
+              `<@${interaction.user.id}> has been verified and assigned the Verified role.`
+            )
+            .setColor("BLUE")
+            .setTimestamp(),
+        ],
       });
     }
     await interaction.editReply("Role assigned! You are now verified.");
   } catch (error) {
     logger.error(`Error during verification process: ${error.message}`);
-    await replyWithError(interaction, "An error occurred while processing your verification. Please try again later.");
+    await replyWithError(
+      interaction,
+      "An error occurred while processing your verification. Please try again later."
+    );
   }
 };
 
 const handleListVerified = async (interaction) => {
   try {
-    const verifiedUsers = await User.findAll({ attributes: ["discordId", "bitcoinAddress"] });
-    if (!verifiedUsers.length) return await interaction.reply({ content: "No verified users found.", ephemeral: true });
-    const userList = verifiedUsers.map(user => `<@${user.discordId}> - Bitcoin Address: ${user.bitcoinAddress}`).join('\n');
-    const embed = new EmbedBuilder().setTitle("Verified Users").setDescription(userList).setColor("#0000FF");
-    const row = new MessageActionRow().addComponents(new MessageButton().setCustomId('refresh_verified_list').setLabel('Refresh').setStyle('PRIMARY'));
+    const verifiedUsers = await User.findAll({
+      attributes: ["discordId", "bitcoinAddress"],
+    });
+    console.log("Verified Users:", verifiedUsers); // Log verified users for debugging
+    if (!verifiedUsers.length) {
+      console.log("No verified users found.");
+      return await interaction.reply({
+        content: "No verified users found.",
+        ephemeral: true,
+      });
+    }
+    const userList = verifiedUsers
+      .map(
+        (user) =>
+          `<@${user.discordId}> - Bitcoin Address: ${user.bitcoinAddress}`
+      )
+      .join("\n");
+    const embed = new EmbedBuilder()
+      .setTitle("Verified Users")
+      .setDescription(userList)
+      .setColor("#0000FF");
+    const row = new MessageActionRow().addComponents(
+      new MessageButton()
+        .setCustomId("refresh_verified_list")
+        .setLabel("Refresh")
+        .setStyle("PRIMARY")
+    );
     await interaction.reply({ embeds: [embed], components: [row] });
   } catch (error) {
+    console.error("Error listing verified users:", error);
     logger.error(`Error listing verified users: ${error.message}`);
-    await replyWithError(interaction, "An error occurred while processing your command. Please try again later.");
+    await replyWithError(
+      interaction,
+      "An error occurred while processing your command. Please try again later."
+    );
   }
 };
 
@@ -138,12 +235,21 @@ const handleRemoveVerification = async (interaction, user) => {
     const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
     if (logChannel) {
       await logChannel.send({
-        embeds: [new EmbedBuilder().setTitle("Verification Removed").setDescription(`<@${user.id}> has had their verification removed.`).setColor("RED").setTimestamp()],
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("Verification Removed")
+            .setDescription(`<@${user.id}> has had their verification removed.`)
+            .setColor("RED")
+            .setTimestamp(),
+        ],
       });
     }
   } catch (error) {
     logger.error(`Error removing verification: ${error.message}`);
-    await replyWithError(interaction, "An error occurred while processing your command. Please try again later.");
+    await replyWithError(
+      interaction,
+      "An error occurred while processing your command. Please try again later."
+    );
   }
 };
 
@@ -157,7 +263,11 @@ const handleCooldown = (commandName, userId) => {
   if (timestamps.has(userId)) {
     const expirationTime = timestamps.get(userId) + cooldownAmount;
     if (now < expirationTime) {
-      throw new Error(`Please wait ${(expirationTime - now) / 1000} more seconds before reusing the \`${commandName}\` command.`);
+      throw new Error(
+        `Please wait ${
+          (expirationTime - now) / 1000
+        } more seconds before reusing the \`${commandName}\` command.`
+      );
     }
   }
   timestamps.set(userId, now);
@@ -166,17 +276,41 @@ const handleCooldown = (commandName, userId) => {
 
 // Application commands definition
 const commands = [
-  { name: "verify", description: "Verify your Bitcoin inscription", options: [{ name: "address", type: ApplicationCommandOptionType.String, description: "Your Bitcoin address", required: false }] },
+  {
+    name: "verify",
+    description: "Verify your Bitcoin inscription",
+    options: [
+      {
+        name: "address",
+        type: ApplicationCommandOptionType.String,
+        description: "Your Bitcoin address",
+        required: false,
+      },
+    ],
+  },
   { name: "help", description: "Get help with bot commands" },
   { name: "list-verified", description: "List all verified users" },
-  { name: "remove-verification", description: "Remove a user's verification", options: [{ name: "user", type: ApplicationCommandOptionType.User, description: "The user to remove verification from", required: true }] },
+  {
+    name: "remove-verification",
+    description: "Remove a user's verification",
+    options: [
+      {
+        name: "user",
+        type: ApplicationCommandOptionType.User,
+        description: "The user to remove verification from",
+        required: true,
+      },
+    ],
+  },
 ];
 
 // Initialize REST API
 const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
 (async () => {
   try {
-    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
+      body: commands,
+    });
     console.log("Successfully registered application commands.");
   } catch (error) {
     console.error("Error registering commands:", error.message);
@@ -188,7 +322,12 @@ client.once("ready", () => {
   console.log("Bot is online!");
   logger.info("Bot started successfully!");
   client.user.setPresence({
-    activities: [{ name: "For Verified Bitcoin inscriptions", type: ActivityType.Watching }],
+    activities: [
+      {
+        name: "For Verified Bitcoin inscriptions",
+        type: ActivityType.Watching,
+      },
+    ],
     status: "online",
   });
 });
@@ -203,12 +342,16 @@ client.on("interactionCreate", async (interaction) => {
       verify: () => handleVerify(interaction, options.getString("address")),
       help: () => interaction.reply({ embeds: [getHelpMessage()] }),
       "list-verified": () => handleListVerified(interaction),
-      "remove-verification": () => handleRemoveVerification(interaction, options.getUser("user")),
+      "remove-verification": () =>
+        handleRemoveVerification(interaction, options.getUser("user")),
     };
     await commandHandlers[commandName]();
   } catch (error) {
     logger.error(`Error handling command ${commandName}: ${error.message}`);
-    await replyWithError(interaction, "An error occurred while processing your command. Please try again later.");
+    await replyWithError(
+      interaction,
+      "An error occurred while processing your command. Please try again later."
+    );
   }
 });
 
