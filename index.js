@@ -1,4 +1,4 @@
-// Import necessary libraries and modules
+// Import required modules from discord.js, axios, winston, sequelize, and crypto
 const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, EmbedBuilder, ActivityType } = require("discord.js");
 const axios = require("axios");
 const winston = require("winston");
@@ -6,44 +6,27 @@ const { Sequelize, DataTypes } = require("sequelize");
 const crypto = require("crypto");
 const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL, LOG_CHANNEL_ID, REQUIRED_INSCRIPTIONS } = require("./config.json");
 
-// Initialize Discord client with specified intents
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,           // Intents to receive data about guilds
-    GatewayIntentBits.GuildMessages,    // Intents to receive messages within guilds
-    GatewayIntentBits.MessageContent,   // Intents to receive message content
-  ],
-});
+// Initialize a new Discord client with specific intents
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-// Initialize Sequelize for database connection
-const sequelize = new Sequelize({
-  dialect: "sqlite",                    // Using SQLite dialect for Sequelize
-  storage: "database.sqlite",           // SQLite database file location
-});
-
-// Define User model in Sequelize
+// Setup Sequelize to use SQLite and define the User model
+const sequelize = new Sequelize({ dialect: "sqlite", storage: "database.sqlite" });
 const User = sequelize.define("User", {
-  discordId: { type: DataTypes.STRING, primaryKey: true },  // Discord ID of the user (primary key)
-  bitcoinAddress: { type: DataTypes.STRING, allowNull: false },  // User's Bitcoin address
-  inscriptionId: { type: DataTypes.STRING, allowNull: false },   // ID of the inscription associated with the user
-  otp: { type: DataTypes.STRING, allowNull: false },              // One-time password for user verification
+  discordId: { type: DataTypes.STRING, primaryKey: true },
+  bitcoinAddress: { type: DataTypes.STRING, allowNull: false },
+  inscriptionId: { type: DataTypes.STRING, allowNull: false },
+  otp: { type: DataTypes.STRING, allowNull: false },
 });
-sequelize.sync().then(() => console.log("Database synced!")).catch(error => console.error('Error syncing database:', error));
+sequelize.sync().catch(console.error); // Synchronize the model with the database
 
-// Configure Winston logger for logging
+// Setup winston logger for logging
 const logger = winston.createLogger({
-  level: "info",   // Log level set to info
-  format: winston.format.combine(
-    winston.format.timestamp(),   // Include timestamp in log messages
-    winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)   // Format log messages
-  ),
-  transports: [
-    new winston.transports.Console(),      // Log to console
-    new winston.transports.File({ filename: "bot.log" }),   // Log to file
-  ],
+  level: "info",
+  format: winston.format.combine(winston.format.timestamp(), winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)),
+  transports: [new winston.transports.Console(), new winston.transports.File({ filename: "bot.log" })],
 });
 
-// Utility functions for various tasks (fetching wallet data, verifying inscriptions, etc.)
+// Fetch wallet data from the ORDINALS_API_URL
 const fetchWalletData = async (bitcoinAddress) => {
   try {
     const { data } = await axios.get(`${ORDINALS_API_URL}/wallet/${bitcoinAddress}`);
@@ -54,14 +37,17 @@ const fetchWalletData = async (bitcoinAddress) => {
   }
 };
 
-const verifyInscriptions = async (bitcoinAddress, requiredInscriptions) => {
+// Verify if the wallet contains required inscriptions
+const verifyInscriptions = async (bitcoinAddress) => {
   const walletData = await fetchWalletData(bitcoinAddress);
   if (!walletData) throw new Error("Could not fetch wallet data.");
-  return walletData.inscriptions?.some(inscription => requiredInscriptions.includes(inscription.id));
+  return walletData.inscriptions?.some(inscription => REQUIRED_INSCRIPTIONS.includes(inscription.id));
 };
 
+// Generate a random OTP using crypto
 const generateOTP = () => crypto.randomBytes(3).toString("hex");
 
+// Remove a role from a user
 const removeRole = async (guild, userId) => {
   try {
     const member = await guild.members.fetch(userId);
@@ -72,6 +58,7 @@ const removeRole = async (guild, userId) => {
   }
 };
 
+// Create and return an EmbedBuilder object for the help message
 const getHelpMessage = () => new EmbedBuilder()
   .setTitle("Help")
   .setDescription(`
@@ -95,27 +82,24 @@ const getHelpMessage = () => new EmbedBuilder()
   .setColor("#00FF00")
   .setTimestamp();
 
-const replyWithError = async (interaction, errorMessage) => {
-  const errorMsg = errorMessage || "An error occurred while processing your command. Please try again later.";
+// Reply with an error message to the interaction
+const replyWithError = async (interaction, errorMessage = "An error occurred while processing your command. Please try again later.") => {
   try {
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: errorMsg, ephemeral: true });
-    } else {
-      await interaction.reply({ content: errorMsg, ephemeral: true });
-    }
+    const method = interaction.deferred || interaction.replied ? 'editReply' : 'reply';
+    await interaction[method]({ content: errorMessage, ephemeral: true });
   } catch (error) {
     logger.error(`Error replying with error message: ${error.message}`);
   }
 };
 
-// Command handler for "/verify" command
+// Handle the verification process for the verify command
 const handleVerify = async (interaction, bitcoinAddress) => {
   await interaction.deferReply({ ephemeral: true });
   try {
     if (!bitcoinAddress) return await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
     const walletData = await fetchWalletData(bitcoinAddress);
     if (!walletData?.inscriptions?.length) return await replyWithError(interaction, "No inscriptions found in your wallet.");
-    if (!(await verifyInscriptions(bitcoinAddress, REQUIRED_INSCRIPTIONS))) {
+    if (!(await verifyInscriptions(bitcoinAddress))) {
       await removeRole(interaction.guild, interaction.user.id);
       return await interaction.editReply("You do not hold any of the required inscriptions.");
     }
@@ -124,7 +108,6 @@ const handleVerify = async (interaction, bitcoinAddress) => {
     let role = guild.roles.cache.get(ROLE_ID) || (await guild.roles.create({ name: "Verified", color: "BLUE" }));
     await member.roles.add(role);
 
-    // Store user information in the database
     await User.upsert({
       discordId: interaction.user.id,
       bitcoinAddress: bitcoinAddress,
@@ -151,7 +134,7 @@ const handleVerify = async (interaction, bitcoinAddress) => {
   }
 };
 
-// Command cooldowns map to prevent command spamming
+// Implement a simple cooldown mechanism for commands
 const cooldowns = new Map();
 const handleCooldown = (commandName, userId) => {
   if (!cooldowns.has(commandName)) cooldowns.set(commandName, new Map());
@@ -168,7 +151,7 @@ const handleCooldown = (commandName, userId) => {
   setTimeout(() => timestamps.delete(userId), cooldownAmount);
 };
 
-// Application commands definition to register with Discord
+// Define the bot commands
 const commands = [
   {
     name: "verify",
@@ -178,7 +161,7 @@ const commands = [
         name: "address",
         type: ApplicationCommandOptionType.String,
         description: "Your Bitcoin address",
-        required: true,  // Make the address option mandatory
+        required: true,
       }
     ]
   },
@@ -188,11 +171,11 @@ const commands = [
   },
 ];
 
-// Initialize REST API and register application commands
+// Register the commands with Discord
 const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
 (async () => {
   try {
-    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });  // Register commands for the specified guild
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
     console.log("Successfully registered application commands.");
   } catch (error) {
     console.error("Error registering commands:", error.message);
@@ -209,22 +192,22 @@ client.once("ready", () => {
   });
 });
 
-// Event listener for interactions (commands) received by the bot
+// Event listener for handling interactions (commands)
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isCommand()) return;   // Ignore interactions that are not commands
+  if (!interaction.isCommand()) return;
   const { commandName, options, user } = interaction;
   try {
-    handleCooldown(commandName, user.id);  // Handle command cooldowns
+    handleCooldown(commandName, user.id);
     const commandHandlers = {
-      verify: () => handleVerify(interaction, options.getString("address")),  // Handler for "/verify" command
-      help: () => interaction.reply({ embeds: [getHelpMessage()] }),         // Handler for "/help" command
+      verify: () => handleVerify(interaction, options.getString("address")),
+      help: () => interaction.reply({ embeds: [getHelpMessage()] }),
     };
-    await commandHandlers[commandName]();   // Execute the appropriate command handler
+    await commandHandlers[commandName]();
   } catch (error) {
-    logger.error(`Error handling command ${commandName}: ${error.message}`);  // Log any errors during command handling
+    logger.error(`Error handling command ${commandName}: ${error.message}`);
     await replyWithError(interaction, "An error occurred while processing your command. Please try again later.");
   }
 });
 
-// Login to Discord using the bot token
+// Login to Discord with the bot token
 client.login(BOT_TOKEN);
