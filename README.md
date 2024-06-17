@@ -26,9 +26,7 @@ Ordbot uses SQLite as its database system. The database file is named `database.
 3. Run the bot using `node index.js`.
 
 ## Usage 🚀
-- `/verify [address]`: Verify your Bitcoin inscription. Optionally provide a Bitcoin address.
-- `/list-verified`: List all verified users.
-- `/remove-verification [user]`: Remove a user's verification.
+- `/verify [address]`: Verify your Bitcoin inscription by providing your Bitcoin (Taproot) wallet address.
 
 ## Adding the Bot to Your Server 🌐
 To add this bot to your Discord server, click [here](https://discord.com/oauth2/authorize?client_id=1241662241418248212&permissions=633318697598967&scope=bot).
