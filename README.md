@@ -2,7 +2,7 @@
 
 This Discord bot facilitates the verification process using Bitcoin inscriptions and OTP (One-Time Password) for user authentication. It interacts with a wallet API to fetch Bitcoin inscription data and provides role assignment upon successful verification.
 
-![ordbotdemo](https://github.com/ShivgunGaming/ordbot/assets/102505925/a523687f-c3ed-4ada-892b-d480963f1517)
+![bandicam2024-06-1713-02-01-004-ezgif com-video-to-gif-converter](https://github.com/ShivgunGaming/ordbot/assets/102505925/78bd71e1-90d5-4ab7-9115-dd00f2f205c3)
 
 ## Features ✨
 - `verify`: Verify a user's Bitcoin inscription.
