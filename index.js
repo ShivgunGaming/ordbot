@@ -105,7 +105,6 @@ const getHelpMessage = () =>
       `
     **Available Commands:**
     - /verify: Verify your Bitcoin inscription.
-    - /list-verified: List all verified users.
     - /remove-verification: Remove a user's verification.
   `
     )
@@ -186,46 +185,6 @@ const handleVerify = async (interaction, bitcoinAddress) => {
   }
 };
 
-const handleListVerified = async (interaction) => {
-  try {
-    const verifiedUsers = await User.findAll({
-      attributes: ["discordId", "bitcoinAddress"],
-    });
-    console.log("Verified Users:", verifiedUsers); // Log verified users for debugging
-    if (!verifiedUsers.length) {
-      console.log("No verified users found.");
-      return await interaction.reply({
-        content: "No verified users found.",
-        ephemeral: true,
-      });
-    }
-    const userList = verifiedUsers
-      .map(
-        (user) =>
-          `<@${user.discordId}> - Bitcoin Address: ${user.bitcoinAddress}`
-      )
-      .join("\n");
-    const embed = new EmbedBuilder()
-      .setTitle("Verified Users")
-      .setDescription(userList)
-      .setColor("#0000FF");
-    const row = new MessageActionRow().addComponents(
-      new MessageButton()
-        .setCustomId("refresh_verified_list")
-        .setLabel("Refresh")
-        .setStyle("PRIMARY")
-    );
-    await interaction.reply({ embeds: [embed], components: [row] });
-  } catch (error) {
-    console.error("Error listing verified users:", error);
-    logger.error(`Error listing verified users: ${error.message}`);
-    await replyWithError(
-      interaction,
-      "An error occurred while processing your command. Please try again later."
-    );
-  }
-};
-
 const handleRemoveVerification = async (interaction, user) => {
   try {
     const guild = interaction.guild;
@@ -289,7 +248,6 @@ const commands = [
     ],
   },
   { name: "help", description: "Get help with bot commands" },
-  { name: "list-verified", description: "List all verified users" },
   {
     name: "remove-verification",
     description: "Remove a user's verification",
@@ -341,15 +299,13 @@ client.on("interactionCreate", async (interaction) => {
     const commandHandlers = {
       verify: () => handleVerify(interaction, options.getString("address")),
       help: () => interaction.reply({ embeds: [getHelpMessage()] }),
-      "list-verified": () => handleListVerified(interaction),
       "remove-verification": () =>
         handleRemoveVerification(interaction, options.getUser("user")),
     };
     await commandHandlers[commandName]();
   } catch (error) {
     logger.error(`Error handling command ${commandName}: ${error.message}`);
-    await replyWithError(
-      interaction,
+    await replyWithError(interaction,
       "An error occurred while processing your command. Please try again later."
     );
   }
