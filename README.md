@@ -7,8 +7,6 @@ This Discord bot facilitates the verification process using Bitcoin inscriptions
 ## Features ✨
 - `verify`: Verify a user's Bitcoin inscription.
 - `help`: Get help with bot commands.
-- `list-verified`: List all verified users.
-- `remove-verification`: Remove a user's verification.
 
 ## Database
 Ordbot uses SQLite as its database system. The database file is named `database.sqlite`.
