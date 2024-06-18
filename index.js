@@ -1,15 +1,12 @@
-// Import required modules from discord.js, axios, winston, sequelize, and crypto
-const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, EmbedBuilder, ActivityType } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, MessageEmbed, ActivityType } = require("discord.js");
 const axios = require("axios");
 const winston = require("winston");
 const { Sequelize, DataTypes } = require("sequelize");
 const crypto = require("crypto");
 const { BOT_TOKEN, CLIENT_ID, GUILD_ID, ROLE_ID, ORDINALS_API_URL, LOG_CHANNEL_ID, REQUIRED_INSCRIPTIONS } = require("./config.json");
 
-// Initialize a new Discord client with specific intents
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-// Setup Sequelize to use SQLite and define the User model
 const sequelize = new Sequelize({ dialect: "sqlite", storage: "database.sqlite" });
 const User = sequelize.define("User", {
   discordId: { type: DataTypes.STRING, primaryKey: true },
@@ -17,16 +14,14 @@ const User = sequelize.define("User", {
   inscriptionId: { type: DataTypes.STRING, allowNull: false },
   otp: { type: DataTypes.STRING, allowNull: false },
 });
-sequelize.sync().catch(console.error); // Synchronize the model with the database
+sequelize.sync().catch(console.error);
 
-// Setup winston logger for logging
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(winston.format.timestamp(), winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)),
   transports: [new winston.transports.Console(), new winston.transports.File({ filename: "bot.log" })],
 });
 
-// Fetch wallet data from the ORDINALS_API_URL
 const fetchWalletData = async (bitcoinAddress) => {
   try {
     const { data } = await axios.get(`${ORDINALS_API_URL}/wallet/${bitcoinAddress}`);
@@ -37,17 +32,14 @@ const fetchWalletData = async (bitcoinAddress) => {
   }
 };
 
-// Verify if the wallet contains required inscriptions
 const verifyInscriptions = async (bitcoinAddress) => {
   const walletData = await fetchWalletData(bitcoinAddress);
   if (!walletData) throw new Error("Could not fetch wallet data.");
   return walletData.inscriptions?.some(inscription => REQUIRED_INSCRIPTIONS.includes(inscription.id));
 };
 
-// Generate a random OTP using crypto
 const generateOTP = () => crypto.randomBytes(3).toString("hex");
 
-// Remove a role from a user
 const removeRole = async (guild, userId) => {
   try {
     const member = await guild.members.fetch(userId);
@@ -58,8 +50,7 @@ const removeRole = async (guild, userId) => {
   }
 };
 
-// Create and return an EmbedBuilder object for the help message
-const getHelpMessage = () => new EmbedBuilder()
+const getHelpMessage = () => new MessageEmbed()
   .setTitle("Help")
   .setDescription(`
     **Available Commands:**
@@ -82,17 +73,14 @@ const getHelpMessage = () => new EmbedBuilder()
   .setColor("#00FF00")
   .setTimestamp();
 
-// Reply with an error message to the interaction
 const replyWithError = async (interaction, errorMessage = "An error occurred while processing your command. Please try again later.") => {
   try {
-    const method = interaction.deferred || interaction.replied ? 'editReply' : 'reply';
-    await interaction[method]({ content: errorMessage, ephemeral: true });
+    await interaction.reply({ content: errorMessage, ephemeral: true });
   } catch (error) {
     logger.error(`Error replying with error message: ${error.message}`);
   }
 };
 
-// Handle the verification process for the verify command
 const handleVerify = async (interaction, bitcoinAddress) => {
   await interaction.deferReply({ ephemeral: true });
   try {
@@ -119,7 +107,7 @@ const handleVerify = async (interaction, bitcoinAddress) => {
     if (logChannel) {
       await logChannel.send({
         embeds: [
-          new EmbedBuilder()
+          new MessageEmbed()
             .setTitle("User Verified")
             .setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`)
             .setColor("BLUE")
@@ -134,7 +122,6 @@ const handleVerify = async (interaction, bitcoinAddress) => {
   }
 };
 
-// Implement a simple cooldown mechanism for commands
 const cooldowns = new Map();
 const handleCooldown = (commandName, userId) => {
   if (!cooldowns.has(commandName)) cooldowns.set(commandName, new Map());
@@ -151,7 +138,6 @@ const handleCooldown = (commandName, userId) => {
   setTimeout(() => timestamps.delete(userId), cooldownAmount);
 };
 
-// Define the bot commands
 const commands = [
   {
     name: "verify",
@@ -171,7 +157,6 @@ const commands = [
   },
 ];
 
-// Register the commands with Discord
 const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
 (async () => {
   try {
@@ -182,7 +167,6 @@ const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
   }
 })();
 
-// Event listener for when the bot is ready
 client.once("ready", () => {
   console.log("Bot is online!");
   logger.info("Bot started successfully!");
@@ -192,7 +176,6 @@ client.once("ready", () => {
   });
 });
 
-// Event listener for handling interactions (commands)
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
   const { commandName, options, user } = interaction;
@@ -209,5 +192,4 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// Login to Discord with the bot token
 client.login(BOT_TOKEN);
