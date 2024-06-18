@@ -50,48 +50,6 @@ const removeRole = async (guild, userId) => {
   }
 };
 
-const getHelpMessage = () => new EmbedBuilder()
-  .setTitle("Help")
-  .setDescription(`
-    **Available Commands:**
-    - \`/verify\`: Verify your Bitcoin inscription.
-    - \`/help\`: Get help with bot commands.
-
-    **Command Details:**
-    **/verify**
-    Use this command to verify your Bitcoin inscription.
-    \`\`\`
-    Usage: /verify <address>
-    Example: /verify bc1p...0lhx
-    \`\`\`
-    **/help**
-    Use this command to display this help message.
-    \`\`\`
-    Usage: /help
-    \`\`\`
-  `)
-  .setColor("#00FF00")
-  .setTimestamp();
-
-const getAboutMessage = () => new EmbedBuilder()
-  .setTitle("About Ordbot")
-  .setDescription(`
-    **Bot Name:** Ordbot
-    **Version:** 1.0.0
-    **Description:** Ordbot helps users verify their Bitcoin inscriptions by checking if they hold any of the required inscriptions. It assigns a role to verified users and logs the verification process.
-
-    **Features:**
-    - Verify Bitcoin inscriptions.
-    - Assign roles to verified users.
-    - Provide help and support commands.
-
-    **Developer:** $ʜɪᴠɢᴜɴ ᴛʜᴇ ᴅᴇᴠ ᴅᴇᴍᴏɴ
-    **GitHub:** https://github.com/ShivgunGaming
-    **Support:** For support, contact the developer.
-  `)
-  .setColor("#00FF00")
-  .setTimestamp();
-
 const replyWithError = async (interaction, errorMessage = "An error occurred while processing your command. Please try again later.") => {
   try {
     await interaction.reply({ content: errorMessage, ephemeral: true });
@@ -103,13 +61,19 @@ const replyWithError = async (interaction, errorMessage = "An error occurred whi
 const handleVerify = async (interaction, bitcoinAddress) => {
   await interaction.deferReply({ ephemeral: true });
   try {
-    if (!bitcoinAddress) return await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
+    if (!bitcoinAddress) {
+      return await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
+    }
     const walletData = await fetchWalletData(bitcoinAddress);
-    if (!walletData?.inscriptions?.length) return await replyWithError(interaction, "No inscriptions found in your wallet.");
+    if (!walletData?.inscriptions?.length) {
+      await removeRole(interaction.guild, interaction.user.id);
+      return await interaction.editReply("No valid inscriptions found in your wallet.");
+    }
     if (!(await verifyInscriptions(bitcoinAddress))) {
       await removeRole(interaction.guild, interaction.user.id);
       return await interaction.editReply("You do not hold any of the required inscriptions.");
     }
+    
     const guild = interaction.guild;
     const member = await guild.members.fetch(interaction.user.id);
     let role = guild.roles.cache.get(ROLE_ID) || (await guild.roles.create({ name: "Verified", color: "BLUE" }));
@@ -135,6 +99,7 @@ const handleVerify = async (interaction, bitcoinAddress) => {
       });
     }
     await interaction.editReply("Role assigned! You are now verified.");
+
   } catch (error) {
     logger.error(`Error during verification process: ${error.message}`);
     await replyWithError(interaction, "An error occurred while processing your verification. Please try again later.");
@@ -190,11 +155,59 @@ const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
   }
 })();
 
+const getHelpMessage = () => new EmbedBuilder()
+  .setTitle("Help")
+  .setDescription(`
+    **Available Commands:**
+    - \`/verify\`: Verify your Bitcoin inscription.
+    - \`/help\`: Get help with bot commands.
+    - \`/about\`: Learn more about the bot.
+
+    **Command Details:**
+    **/verify**
+    Use this command to verify your Bitcoin inscription.
+    \`\`\`
+    Usage: /verify <address>
+    Example: /verify bc1p...0lhx
+    \`\`\`
+    **/help**
+    Use this command to display this help message.
+    \`\`\`
+    Usage: /help
+    \`\`\`
+    **/about**
+    Use this command to learn more about the bot.
+    \`\`\`
+    Usage: /about
+    \`\`\`
+  `)
+  .setColor("#00FF00")
+  .setTimestamp();
+
+const getAboutMessage = () => new EmbedBuilder()
+  .setTitle("About Ordbot")
+  .setDescription(`
+    **Bot Name:** Ordbot
+    **Version:** 1.0.0
+    **Description:** Ordbot helps users verify their Bitcoin inscriptions by checking if they hold any of the required inscriptions. It assigns a role to verified users and logs the verification process.
+
+    **Features:**
+    - Verify Bitcoin inscriptions.
+    - Assign roles to verified users.
+    - Provide help and support commands.
+
+    **Developer:** $ʜɪᴠɢᴜɴ ᴛʜᴇ ᴅᴇᴠ ᴅᴇᴍᴏɴ
+    **GitHub:** https://github.com/ShivgunGaming
+    **Support:** For support, contact the developer or visit our support channel.
+  `)
+  .setColor("#00FF00")
+  .setTimestamp();
+
 client.once("ready", () => {
   console.log("Bot is online!");
   logger.info("Bot started successfully!");
   client.user.setPresence({
-    activities: [{ name: "For Verified Bitcoin inscriptions", type: ActivityType.Watching }],
+    activities: [{ name: "For Verified Bitcoin inscriptions | /help", type: ActivityType.Watching }],
     status: "online",
   });
 });
