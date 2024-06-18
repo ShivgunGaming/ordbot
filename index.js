@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, MessageEmbed, ActivityType } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, ApplicationCommandOptionType, EmbedBuilder, ActivityType } = require("discord.js");
 const axios = require("axios");
 const winston = require("winston");
 const { Sequelize, DataTypes } = require("sequelize");
@@ -50,7 +50,7 @@ const removeRole = async (guild, userId) => {
   }
 };
 
-const getHelpMessage = () => new MessageEmbed()
+const getHelpMessage = () => new EmbedBuilder()
   .setTitle("Help")
   .setDescription(`
     **Available Commands:**
@@ -69,6 +69,25 @@ const getHelpMessage = () => new MessageEmbed()
     \`\`\`
     Usage: /help
     \`\`\`
+  `)
+  .setColor("#00FF00")
+  .setTimestamp();
+
+const getAboutMessage = () => new EmbedBuilder()
+  .setTitle("About Ordbot")
+  .setDescription(`
+    **Bot Name:** Ordbot
+    **Version:** 1.0.0
+    **Description:** Ordbot helps users verify their Bitcoin inscriptions by checking if they hold any of the required inscriptions. It assigns a role to verified users and logs the verification process.
+
+    **Features:**
+    - Verify Bitcoin inscriptions.
+    - Assign roles to verified users.
+    - Provide help and support commands.
+
+    **Developer:** $ʜɪᴠɢᴜɴ ᴛʜᴇ ᴅᴇᴠ ᴅᴇᴍᴏɴ
+    **GitHub:** https://github.com/ShivgunGaming
+    **Support:** For support, contact the developer.
   `)
   .setColor("#00FF00")
   .setTimestamp();
@@ -107,7 +126,7 @@ const handleVerify = async (interaction, bitcoinAddress) => {
     if (logChannel) {
       await logChannel.send({
         embeds: [
-          new MessageEmbed()
+          new EmbedBuilder()
             .setTitle("User Verified")
             .setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`)
             .setColor("BLUE")
@@ -155,6 +174,10 @@ const commands = [
     name: "help",
     description: "Get help with bot commands"
   },
+  {
+    name: "about",
+    description: "Learn more about the bot"
+  }
 ];
 
 const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
@@ -184,6 +207,7 @@ client.on("interactionCreate", async (interaction) => {
     const commandHandlers = {
       verify: () => handleVerify(interaction, options.getString("address")),
       help: () => interaction.reply({ embeds: [getHelpMessage()] }),
+      about: () => interaction.reply({ embeds: [getAboutMessage()] }),
     };
     await commandHandlers[commandName]();
   } catch (error) {
