@@ -4,6 +4,7 @@ const { handleVerify } = require("../commands/verify");
 
 const handleInteraction = async (interaction, logger) => {
   if (!interaction.isCommand()) return;
+
   const { commandName, options, user } = interaction;
 
   try {
@@ -14,8 +15,10 @@ const handleInteraction = async (interaction, logger) => {
       help: () => interaction.reply({ embeds: [getHelpMessage()] }),
     };
 
-    if (commandHandlers[commandName]) {
-      await commandHandlers[commandName]();
+    const handler = commandHandlers[commandName];
+
+    if (handler) {
+      await handler();
     } else {
       throw new Error("Unknown command");
     }
@@ -28,7 +31,10 @@ const handleInteraction = async (interaction, logger) => {
 const cooldowns = new Map();
 
 const handleCooldown = (commandName, userId) => {
-  if (!cooldowns.has(commandName)) cooldowns.set(commandName, new Map());
+  if (!cooldowns.has(commandName)) {
+    cooldowns.set(commandName, new Map());
+  }
+  
   const now = Date.now();
   const timestamps = cooldowns.get(commandName);
   const cooldownAmount = 3000; // 3 seconds cooldown
@@ -36,9 +42,11 @@ const handleCooldown = (commandName, userId) => {
   if (timestamps.has(userId)) {
     const expirationTime = timestamps.get(userId) + cooldownAmount;
     if (now < expirationTime) {
-      throw new Error(`Please wait ${(expirationTime - now) / 1000} more seconds before reusing the \`${commandName}\` command.`);
+      const remainingTime = (expirationTime - now) / 1000;
+      throw new Error(`Please wait ${remainingTime.toFixed(1)} more seconds before reusing the \`${commandName}\` command.`);
     }
   }
+
   timestamps.set(userId, now);
   setTimeout(() => timestamps.delete(userId), cooldownAmount);
 };
