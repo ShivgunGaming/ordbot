@@ -8,17 +8,29 @@ const { ROLE_ID, LOG_CHANNEL_ID } = require("../config.json");
 const { EmbedBuilder } = require("discord.js");
 
 const handleVerify = async (interaction, bitcoinAddress, logger) => {
-  await interaction.deferReply({ ephemeral: true });
   try {
-    if (!bitcoinAddress) return await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
+    await interaction.deferReply({ ephemeral: true });
+
+    if (!bitcoinAddress) {
+      await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
+      return;
+    }
+
     const walletData = await fetchWalletData(bitcoinAddress);
-    if (!walletData?.inscriptions?.length) return await replyWithError(interaction, "No inscriptions found in your wallet.");
+    if (!walletData?.inscriptions?.length) {
+      await replyWithError(interaction, "No inscriptions found in your wallet.");
+      return;
+    }
+
     if (!(await verifyInscriptions(bitcoinAddress))) {
       await removeRole(interaction.guild, interaction.user.id);
-      return await interaction.editReply("You do not hold any of the required inscriptions.");
+      await interaction.editReply("You do not hold any of the required inscriptions.");
+      return;
     }
+
     const guild = interaction.guild;
     const member = await guild.members.fetch(interaction.user.id);
+
     let role = guild.roles.cache.get(ROLE_ID) || (await guild.roles.create({ name: "Verified", color: "BLUE" }));
     await member.roles.add(role);
 
@@ -41,6 +53,7 @@ const handleVerify = async (interaction, bitcoinAddress, logger) => {
         ],
       });
     }
+
     await interaction.editReply("Role assigned! You are now verified.");
   } catch (error) {
     logger.error(`Error during verification process: ${error.message}`);
