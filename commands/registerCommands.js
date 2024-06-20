@@ -1,6 +1,6 @@
-const { ApplicationCommandOptionType } = require("discord.js");
+const { ApplicationCommandOptionType, Routes } = require("discord.js");
 
-const commands = [
+const commandDefinitions = [
   {
     name: "verify",
     description: "Verify your Bitcoin inscription",
@@ -21,7 +21,10 @@ const commands = [
 
 const registerCommands = async (rest, clientId, guildId, logger) => {
   try {
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
+    await rest.put(
+      Routes.applicationGuildCommands(clientId, guildId),
+      { body: commandDefinitions }
+    );
     console.log("Successfully registered application commands.");
   } catch (error) {
     logger.error("Error registering commands:", error.message);
