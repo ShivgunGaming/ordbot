@@ -2,14 +2,15 @@ const axios = require("axios");
 const { ORDINALS_API_URL } = require("../config.json");
 const winston = require("winston");
 
-// Fetch wallet data from the ORDINALS_API_URL
+// Function to fetch wallet data from ORDINALS_API_URL
 const fetchWalletData = async (bitcoinAddress) => {
   try {
-    const { data } = await axios.get(`${ORDINALS_API_URL}/wallet/${bitcoinAddress}`);
-    return data;
+    const response = await axios.get(`${ORDINALS_API_URL}/wallet/${bitcoinAddress}`);
+    return response.data;
   } catch (error) {
-    winston.error(`Error fetching wallet data for ${bitcoinAddress}: ${error.message}`);
-    return null;
+    const errorMessage = `Error fetching wallet data for ${bitcoinAddress}: ${error.message}`;
+    winston.error(errorMessage);
+    throw new Error(errorMessage); // Re-throw the error to handle it further up the call stack
   }
 };
 
