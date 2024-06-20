@@ -1,14 +1,20 @@
-const winston = require("winston");
+const { createLogger, format, transports } = require("winston");
 
+// Function to set up the logger
 const setupLogger = () => {
-  return winston.createLogger({
+  const logger = createLogger({
     level: "info",
-    format: winston.format.combine(
-      winston.format.timestamp(),
-      winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)
+    format: format.combine(
+      format.timestamp(),
+      format.printf(({ timestamp, level, message }) => `${timestamp} [${level}]: ${message}`)
     ),
-    transports: [new winston.transports.Console(), new winston.transports.File({ filename: "bot.log" })],
+    transports: [
+      new transports.Console(),
+      new transports.File({ filename: "bot.log" })
+    ],
   });
+
+  return logger;
 };
 
 module.exports = { setupLogger };
