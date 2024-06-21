@@ -1,6 +1,10 @@
 const crypto = require("crypto");
 
-// Generate a random OTP using crypto
-const generateOTP = () => crypto.randomBytes(3).toString("hex");
+// Function to generate a random OTP
+const generateOTP = () => {
+  const bytes = crypto.randomBytes(3); // Generate 3 random bytes
+  const otp = bytes.toString("hex"); // Convert bytes to hex string
+  return otp;
+};
 
 module.exports = { generateOTP };
