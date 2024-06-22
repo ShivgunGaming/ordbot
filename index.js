@@ -36,7 +36,6 @@ const setBotPresence = (client) => {
 // Handle bot ready event
 const onBotReady = (client) => {
   client.once("ready", () => {
-    console.log("Bot is online!");
     logger.info("Bot started successfully!");
     setBotPresence(client);
   });
@@ -60,6 +59,5 @@ const main = async () => {
 
 // Start the bot
 main().catch(error => {
-  console.error("Error starting the bot:", error);
   logger.error("Error starting the bot:", error);
 });
