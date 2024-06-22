@@ -5,28 +5,61 @@ const { registerCommands } = require("./commands/registerCommands");
 const { handleInteraction } = require("./handlers/interactionHandler");
 const { setupLogger } = require("./utils/logger");
 
-// Initialize a new Discord client with specific intents
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+// Initialize logger
 const logger = setupLogger();
 
-// Register commands with Discord
-const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
-registerCommands(rest, CLIENT_ID, GUILD_ID, logger);
+// Initialize a new Discord client with specific intents
+const initializeClient = () => {
+  return new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
+};
 
-// Event listener for when the bot is ready
-client.once("ready", () => {
-  console.log("Bot is online!");
-  logger.info("Bot started successfully!");
+// Register commands with Discord
+const initializeCommands = async () => {
+  const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
+  await registerCommands(rest, CLIENT_ID, GUILD_ID, logger);
+};
+
+// Set bot presence
+const setBotPresence = (client) => {
   client.user.setPresence({
     activities: [{ name: "For Verified Bitcoin inscriptions", type: ActivityType.Watching }],
     status: "online",
   });
-});
+};
 
-// Event listener for handling interactions (commands)
-client.on("interactionCreate", async (interaction) => {
-  await handleInteraction(interaction, logger);
-});
+// Handle bot ready event
+const onBotReady = (client) => {
+  client.once("ready", () => {
+    console.log("Bot is online!");
+    logger.info("Bot started successfully!");
+    setBotPresence(client);
+  });
+};
 
-// Login to Discord with the bot token
-client.login(BOT_TOKEN);
+// Handle interaction create event
+const onInteractionCreate = (client) => {
+  client.on("interactionCreate", async (interaction) => {
+    await handleInteraction(interaction, logger);
+  });
+};
+
+// Main function to initialize and start the bot
+const main = async () => {
+  const client = initializeClient();
+  await initializeCommands();
+  onBotReady(client);
+  onInteractionCreate(client);
+  client.login(BOT_TOKEN);
+};
+
+// Start the bot
+main().catch(error => {
+  console.error("Error starting the bot:", error);
+  logger.error("Error starting the bot:", error);
+});
