@@ -14,6 +14,9 @@ const setupLogger = () => {
     ],
   });
 
+  // Debugging statements
+  console.log("Logger transports:", logger.transports);
+
   return logger;
 };
 
