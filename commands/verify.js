@@ -17,21 +17,16 @@ const handleVerify = async (interaction, bitcoinAddress, logger) => {
     }
 
     const walletData = await fetchWalletData(bitcoinAddress);
-    if (!walletData?.inscriptions?.length) {
-      await replyWithError(interaction, "No inscriptions found in your wallet.");
-      return;
-    }
-
-    if (!(await verifyInscriptions(bitcoinAddress))) {
+    if (!walletData?.inscriptions?.length || !(await verifyInscriptions(bitcoinAddress))) {
       await removeRole(interaction.guild, interaction.user.id);
-      await interaction.editReply("You do not hold any of the required inscriptions.");
+      await replyWithError(interaction, "No inscriptions found in your wallet or you do not hold required inscriptions.");
       return;
     }
 
     const guild = interaction.guild;
     const member = await guild.members.fetch(interaction.user.id);
 
-    let role = guild.roles.cache.get(ROLE_ID) || (await guild.roles.create({ name: "Verified", color: "BLUE" }));
+    let role = guild.roles.cache.get(ROLE_ID) || await guild.roles.create({ name: "Verified", color: "BLUE" });
     await member.roles.add(role);
 
     await User.upsert({
@@ -45,12 +40,13 @@ const handleVerify = async (interaction, bitcoinAddress, logger) => {
     if (logChannel) {
       await logChannel.send({
         embeds: [
-          new EmbedBuilder()
-            .setTitle("User Verified")
-            .setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`)
-            .setColor("BLUE")
-            .setTimestamp(),
-        ],
+          {
+            title: "User Verified",
+            description: `<@${interaction.user.id}> has been verified and assigned the Verified role.`,
+            color: "BLUE",
+            timestamp: new Date()
+          }
+        ]
       });
     }
 
