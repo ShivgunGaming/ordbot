@@ -1,6 +1,14 @@
 const { EmbedBuilder } = require("discord.js");
 
-// Function to get the usage details for a specific command
+/**
+ * Generate usage details for a specific command.
+ * 
+ * @param {string} command - The command name.
+ * @param {string} description - The command description.
+ * @param {string} usage - The usage information for the command.
+ * @param {string|null} example - An example usage of the command.
+ * @returns {string} - Formatted command usage details.
+ */
 const getCommandUsage = (command, description, usage, example = null) => `
   **${command}**
   ${description}
@@ -10,7 +18,11 @@ const getCommandUsage = (command, description, usage, example = null) => `
   \`\`\`
 `;
 
-// Create and return an EmbedBuilder object for the help message
+/**
+ * Create and return an EmbedBuilder object for the help message.
+ * 
+ * @returns {EmbedBuilder} - The EmbedBuilder object with help message details.
+ */
 const getHelpMessage = () => {
   const commandsList = `
     **Available Commands:**
