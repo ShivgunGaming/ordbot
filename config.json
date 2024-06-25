@@ -3,6 +3,7 @@
     "CLIENT_ID": "Your client ID",
     "GUILD_ID": "Your guild ID",
     "ROLE_ID": "Your role ID",
+    "ADMIN_ROLE_ID": "Your admin role ID",
     "ORDINALS_API_URL": "https://turbo.ordinalswallet.com"
     "REQUIRED_INSCRIPTIONS": [
       "Your inscriptions",
