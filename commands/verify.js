@@ -12,21 +12,26 @@ const handleVerify = async (interaction, bitcoinAddress, logger) => {
     await interaction.deferReply({ ephemeral: true });
 
     if (!bitcoinAddress) {
-      await replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
-      return;
+      return replyWithError(interaction, "Invalid Bitcoin address. Please provide a valid address.");
     }
 
     const walletData = await fetchWalletData(bitcoinAddress);
-    if (!walletData?.inscriptions?.length || !(await verifyInscriptions(bitcoinAddress))) {
+    const hasInscriptions = walletData?.inscriptions?.length;
+    const inscriptionsVerified = await verifyInscriptions(bitcoinAddress);
+
+    if (!hasInscriptions || !inscriptionsVerified) {
       await removeRole(interaction.guild, interaction.user.id);
-      await replyWithError(interaction, "No inscriptions found in your wallet or you do not hold required inscriptions.");
-      return;
+      return replyWithError(interaction, "No inscriptions found in your wallet or you do not hold required inscriptions.");
     }
 
     const guild = interaction.guild;
     const member = await guild.members.fetch(interaction.user.id);
+    let role = guild.roles.cache.get(ROLE_ID);
 
-    let role = guild.roles.cache.get(ROLE_ID) || await guild.roles.create({ name: "Verified", color: "BLUE" });
+    if (!role) {
+      role = await guild.roles.create({ name: "Verified", color: "BLUE" });
+    }
+
     await member.roles.add(role);
 
     await User.upsert({
@@ -38,16 +43,13 @@ const handleVerify = async (interaction, bitcoinAddress, logger) => {
 
     const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
     if (logChannel) {
-      await logChannel.send({
-        embeds: [
-          {
-            title: "User Verified",
-            description: `<@${interaction.user.id}> has been verified and assigned the Verified role.`,
-            color: "BLUE",
-            timestamp: new Date()
-          }
-        ]
-      });
+      const embed = new EmbedBuilder()
+        .setTitle("User Verified")
+        .setDescription(`<@${interaction.user.id}> has been verified and assigned the Verified role.`)
+        .setColor("BLUE")
+        .setTimestamp();
+
+      await logChannel.send({ embeds: [embed] });
     }
 
     await interaction.editReply("Role assigned! You are now verified.");
