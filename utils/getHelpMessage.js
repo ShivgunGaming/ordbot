@@ -23,24 +23,18 @@ const getCommandUsage = (command, description, usage, example = null) => `
  * 
  * @returns {EmbedBuilder} - The EmbedBuilder object with help message details.
  */
-const getHelpMessage = () => {
-  const commandsList = `
+const getHelpMessage = () => new EmbedBuilder()
+  .setTitle("Help")
+  .setDescription(`
     **Available Commands:**
     - \`/verify\`: Verify your Bitcoin inscription.
     - \`/help\`: Get help with bot commands.
-  `;
 
-  const commandDetails = `
     **Command Details:**
     ${getCommandUsage("/verify", "Use this command to verify your Bitcoin inscription.", "/verify <address>", "bc1p...0lhx")}
     ${getCommandUsage("/help", "Use this command to display this help message.", "/help")}
-  `;
-
-  return new EmbedBuilder()
-    .setTitle("Help")
-    .setDescription(`${commandsList}${commandDetails}`)
-    .setColor("#ED9121")
-    .setTimestamp();
-};
+  `)
+  .setColor("#ED9121")
+  .setTimestamp();
 
 module.exports = { getHelpMessage };
