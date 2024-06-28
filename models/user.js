@@ -1,49 +1,50 @@
 const { Sequelize, DataTypes } = require("sequelize");
 
-const initializeSequelize = () => {
-  return new Sequelize({
-    dialect: "sqlite",
-    storage: "database.sqlite",
-  });
-};
-
-const defineUserModel = (sequelize) => {
-  return sequelize.define("User", {
-    discordId: {
-      type: DataTypes.STRING,
-      primaryKey: true,
-    },
-    bitcoinAddress: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    inscriptionId: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-    otp: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
-  });
-};
-
-const synchronizeDatabase = async (sequelize) => {
-  try {
-    await sequelize.authenticate();
-    console.log("Connection to the database has been established successfully.");
-    await sequelize.sync();
-    console.log("Database synchronized.");
-  } catch (error) {
-    console.error("Unable to connect to the database:", error);
+class Database {
+  constructor() {
+    this.sequelize = new Sequelize({
+      dialect: "sqlite",
+      storage: "database.sqlite",
+    });
+    this.models = this.defineModels();
   }
-};
 
-const sequelize = initializeSequelize();
-const User = defineUserModel(sequelize);
+  defineModels() {
+    const User = this.sequelize.define("User", {
+      discordId: {
+        type: DataTypes.STRING,
+        primaryKey: true,
+      },
+      bitcoinAddress: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      inscriptionId: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+      otp: {
+        type: DataTypes.STRING,
+        allowNull: false,
+      },
+    });
 
-(async () => {
-  await synchronizeDatabase(sequelize);
-})();
+    return { User };
+  }
 
-module.exports = { User, sequelize };
+  async synchronize() {
+    try {
+      await this.sequelize.authenticate();
+      console.log("Connection to the database has been established successfully.");
+      await this.sequelize.sync();
+      console.log("Database synchronized.");
+    } catch (error) {
+      console.error("Unable to connect to the database:", error);
+    }
+  }
+}
+
+const db = new Database();
+db.synchronize();
+
+module.exports = db.models;
