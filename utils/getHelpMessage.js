@@ -1,5 +1,20 @@
 const { EmbedBuilder } = require("discord.js");
 
+// Command details configuration
+const commands = [
+  {
+    command: "/verify",
+    description: "Use this command to verify your Bitcoin inscription.",
+    usage: "/verify <address>",
+    example: "bc1p...0lhx"
+  },
+  {
+    command: "/help",
+    description: "Use this command to display this help message.",
+    usage: "/help"
+  }
+];
+
 /**
  * Generate usage details for a specific command.
  * 
@@ -19,22 +34,38 @@ const getCommandUsage = (command, description, usage, example = null) => `
 `;
 
 /**
+ * Initialize an EmbedBuilder object.
+ * 
+ * @param {string} title - The title of the embed.
+ * @param {string} description - The description of the embed.
+ * @returns {EmbedBuilder} - The initialized EmbedBuilder object.
+ */
+const createEmbedBuilder = (title, description) => new EmbedBuilder()
+  .setTitle(title)
+  .setDescription(description)
+  .setColor("#ED9121")
+  .setTimestamp();
+
+/**
  * Create and return an EmbedBuilder object for the help message.
  * 
  * @returns {EmbedBuilder} - The EmbedBuilder object with help message details.
  */
-const getHelpMessage = () => new EmbedBuilder()
-  .setTitle("Help")
-  .setDescription(`
+const getHelpMessage = () => {
+  const commandDetails = commands.map(({ command, description, usage, example }) =>
+    getCommandUsage(command, description, usage, example)
+  ).join("\n");
+
+  const description = `
     **Available Commands:**
     - \`/verify\`: Verify your Bitcoin inscription.
     - \`/help\`: Get help with bot commands.
 
     **Command Details:**
-    ${getCommandUsage("/verify", "Use this command to verify your Bitcoin inscription.", "/verify <address>", "bc1p...0lhx")}
-    ${getCommandUsage("/help", "Use this command to display this help message.", "/help")}
-  `)
-  .setColor("#ED9121")
-  .setTimestamp();
+    ${commandDetails}
+  `;
+
+  return createEmbedBuilder("Help", description);
+};
 
 module.exports = { getHelpMessage };
