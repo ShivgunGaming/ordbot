@@ -8,7 +8,7 @@ const handleCooldown = (commandName, userId) => {
   if (!cooldowns.has(commandName)) {
     cooldowns.set(commandName, new Map());
   }
-  
+
   const now = Date.now();
   const timestamps = cooldowns.get(commandName);
   const cooldownAmount = 3000; // 3 seconds cooldown
@@ -40,7 +40,22 @@ const handleInteraction = async (interaction, logger) => {
 
   const { commandName, user } = interaction;
 
+  // Log the entire interaction object for debugging
   try {
+    const interactionCopy = JSON.parse(JSON.stringify(interaction, (key, value) => 
+      typeof value === 'bigint' ? value.toString() : value
+    ));
+    console.log("Interaction received:", JSON.stringify(interactionCopy, null, 2));
+  } catch (error) {
+    console.error("Error serializing interaction:", error.message);
+  }
+
+  try {
+    // Add a check for entitlements
+    if (interaction.entitlements === undefined) {
+      interaction.entitlements = []; // Ensure it's an array
+    }
+
     handleCooldown(commandName, user.id);
 
     const handler = commandHandlers[commandName];
